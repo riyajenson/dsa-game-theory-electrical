@@ -1,5 +1,6 @@
 #include "GameTheoryEngine.h"
 #include "NetworkGraph.h"
+#include "SimulationMetrics.h"
 
 #include <iomanip>
 #include <iostream>
@@ -170,8 +171,54 @@ void runRoutingDemo() {
     printRoute("Energy-aware route:", energyAwareRoute);
 }
 
+void runMetricsDemo() {
+    SimulationMetrics metrics;
+
+    vector<SensorNode> roundOneNodes = {
+        {1, 80.0, 0.90, 5, 5, 0, NodeStrategy::Cooperative},
+        {2, 70.0, 0.40, 5, 1, 2, NodeStrategy::Selfish},
+        {3, 42.0, 0.80, 4, 4, 0, NodeStrategy::Cooperative}
+    };
+    vector<SensorNode> roundTwoNodes = roundOneNodes;
+    roundTwoNodes[0].energy = 72.0;
+    roundTwoNodes[1].energy = 61.0;
+    roundTwoNodes[2].energy = 0.0;
+
+    metrics.recordRound({1, 12, 10, roundOneNodes});
+    metrics.recordRound({2, 9, 7, roundTwoNodes});
+
+    SimulationMetricsResult result = metrics.getResult();
+
+    cout << "\nPHASE 4 SIMULATION METRICS\n";
+    cout << "Two deterministic sensor-node snapshots are aggregated across rounds.\n\n";
+    cout << "Total attempted packets: " << result.totalAttemptedPackets << "\n";
+    cout << "Total delivered packets: " << result.totalDeliveredPackets << "\n";
+    cout << "Packet delivery ratio: " << fixed << setprecision(2)
+         << result.packetDeliveryRatio * 100.0 << "%\n";
+    cout << "Average residual energy: " << fixed << setprecision(2)
+         << result.averageResidualEnergy << "\n";
+    cout << "Network lifetime round: " << result.networkLifetimeRound << "\n";
+    cout << "Selfish event count: " << result.selfishEventCount << "\n\n";
+
+    cout << left << setw(14) << "Strategy"
+         << setw(18) << "Observations"
+         << setw(20) << "Average energy"
+         << "Selfish events\n";
+    cout << left << setw(14) << "Cooperative"
+         << setw(18) << result.cooperative.nodeObservations
+         << setw(20) << fixed << setprecision(2)
+         << result.cooperative.averageResidualEnergy()
+         << result.cooperative.selfishEvents << "\n";
+    cout << left << setw(14) << "Selfish"
+         << setw(18) << result.selfish.nodeObservations
+         << setw(20) << fixed << setprecision(2)
+         << result.selfish.averageResidualEnergy()
+         << result.selfish.selfishEvents << "\n";
+}
+
 int main() {
     runRepeatedGameDemo();
     runRoutingDemo();
+    runMetricsDemo();
     return 0;
 }

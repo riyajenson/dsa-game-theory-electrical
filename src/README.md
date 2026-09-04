@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This folder contains the C++ implementation for the game-theory decision engine and the Phase 2 graph routing engine.
+This folder contains the C++ implementation for the Phase 1 game-theory decision engine, the Phase 2 graph routing engine, and the Phase 4 simulation metrics engine.
 
 ## Files
 
@@ -10,14 +10,16 @@ This folder contains the C++ implementation for the game-theory decision engine 
 - `GameTheoryEngine.cpp` implements utility calculation, action selection, reputation updates, and selfish-node detection.
 - `NetworkGraph.h` defines the weighted sensor network graph and routing result interfaces.
 - `NetworkGraph.cpp` implements adjacency-list graph storage, Dijkstra shortest path, and energy-aware route selection.
-- `main.cpp` runs the repeated-game demo and the graph routing demo.
+- `SimulationMetrics.h` defines explicit round observations and result structures for packet, energy, lifetime, and strategy metrics.
+- `SimulationMetrics.cpp` aggregates deterministic round observations into Phase 4 metrics.
+- `main.cpp` runs the repeated-game, graph-routing, and Phase 4 simulation-metrics demos.
 
 ## Compile
 
 From the project root:
 
 ```powershell
-g++ -std=c++11 src/main.cpp src/GameTheoryEngine.cpp src/NetworkGraph.cpp -o game_theory_demo.exe
+g++ -std=c++11 src/main.cpp src/GameTheoryEngine.cpp src/NetworkGraph.cpp src/SimulationMetrics.cpp -o game_theory_demo.exe
 ```
 
 ## Run
@@ -33,6 +35,11 @@ g++ -std=c++11 tests/NetworkGraphTests.cpp src/GameTheoryEngine.cpp src/NetworkG
 .\network_graph_tests.exe
 ```
 
+```powershell
+g++ -std=c++11 tests/SimulationMetricsTests.cpp src/GameTheoryEngine.cpp src/SimulationMetrics.cpp -o simulation_metrics_tests.exe
+.\simulation_metrics_tests.exe
+```
+
 ## Save Demo Output
 
 ```powershell
@@ -41,5 +48,5 @@ g++ -std=c++11 tests/NetworkGraphTests.cpp src/GameTheoryEngine.cpp src/NetworkG
 
 ## Current Scope
 
-The current module supports game-theory decisions and graph-based routing. Dynamic programming planning, full simulation metrics, and dashboard visualization are planned for later phases.
+The current module supports Phase 1 game-theory decisions, Phase 2 graph-based routing, and Phase 4 deterministic simulation metrics. Dynamic programming planning, dashboard visualization, persistent simulation data, and richer packet-level simulation remain planned for later phases.
 

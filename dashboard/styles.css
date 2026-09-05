@@ -1,0 +1,262 @@
+:root {
+  color-scheme: dark;
+  --bg: #07111f;
+  --surface: #0d1b2e;
+  --surface-raised: #12243a;
+  --surface-muted: #0a1627;
+  --border: #223957;
+  --text: #e7f0fa;
+  --text-muted: #9bb0c7;
+  --accent: #4fd1c5;
+  --accent-strong: #73e6dc;
+  --warning: #f4b860;
+  --danger: #ff7b86;
+  --success: #78d39b;
+  --shadow: 0 14px 36px rgb(0 0 0 / 22%);
+  --radius: 0.7rem;
+  --gap: clamp(0.85rem, 2vw, 1.25rem);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 0;
+  background: var(--bg);
+}
+
+body {
+  min-width: 0;
+  max-width: 78rem;
+  margin: 0 auto;
+  padding: clamp(1rem, 3vw, 2rem);
+  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 0.98rem/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+header {
+  padding: clamp(1rem, 2.5vw, 1.75rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--surface-raised), var(--surface));
+  box-shadow: var(--shadow);
+}
+
+header p {
+  margin: 0.25rem 0;
+  color: var(--text-muted);
+}
+
+header p:first-child,
+.eyebrow {
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  overflow-wrap: anywhere;
+}
+
+h1 {
+  margin: 0.25rem 0 0.55rem;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  line-height: 1.15;
+}
+
+main {
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+  margin-top: var(--gap);
+}
+
+section {
+  min-width: 0;
+}
+
+.section-heading,
+section > h2 {
+  margin: 0 0 0.8rem;
+  color: var(--text);
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+#metric-grid,
+#node-grid,
+#route-list,
+#strategy-bars {
+  display: grid;
+  min-width: 0;
+  gap: var(--gap);
+}
+
+#metric-grid,
+#node-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+}
+
+#route-list,
+#strategy-bars {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+
+#metric-grid > p,
+#node-grid > p,
+#route-list > p,
+#strategy-bars > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.metric-card,
+.node-card,
+.route-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.metric-card,
+.node-card {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.metric-value {
+  color: var(--accent-strong);
+  font-size: clamp(1.5rem, 4vw, 2.15rem);
+  font-weight: 750;
+  line-height: 1.1;
+}
+
+.node-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.energy-bar {
+  position: relative;
+  min-height: 1.35rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.energy-bar > * {
+  position: relative;
+  z-index: 1;
+}
+
+.energy-bar::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--energy, 50%);
+  content: "";
+  background: var(--accent);
+}
+
+.route-card {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.route-path {
+  min-width: 0;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.status-badge {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--success);
+  font-size: 0.74rem;
+  font-weight: 750;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.chart-bar {
+  min-width: 0;
+  min-height: 0.7rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+}
+
+.is-alert {
+  border-color: color-mix(in srgb, var(--danger) 65%, var(--border));
+  color: var(--danger);
+}
+
+.is-alert .energy-bar::before,
+.energy-bar.is-alert::before {
+  background: var(--warning);
+}
+
+.is-muted {
+  color: var(--text-muted);
+  opacity: 0.72;
+}
+
+#empty-state {
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+#empty-state h2 {
+  margin-top: 0;
+  color: var(--text);
+}
+
+@media (max-width: 42rem) {
+  body {
+    padding: 0.75rem;
+  }
+
+  #metric-grid,
+  #node-grid,
+  #route-list,
+  #strategy-bars {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

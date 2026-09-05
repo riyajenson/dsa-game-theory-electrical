@@ -30,3 +30,5 @@ Task 2: complete (commits 315dccf..505ec19, review clean)
 Task 3: complete (commits 505ec19..fd97f5d, review clean)
 
 Task 4: complete (commits fd97f5d..e3c93bf, review clean)
+
+Final review: complete (fix commit 3e63a0c, all five findings addressed; no new in-scope breakage)

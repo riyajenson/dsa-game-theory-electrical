@@ -34,6 +34,15 @@ var dashboardData = freezeSnapshot({
   ]
 });
 
+var requiredMetricFields = [
+  "attemptedPackets",
+  "deliveredPackets",
+  "deliveryRatio",
+  "averageResidualEnergy",
+  "networkLifetimeRound",
+  "selfishEventCount"
+];
+
 function getElement(id) {
   return document.getElementById(id);
 }
@@ -70,6 +79,12 @@ function clampEnergy(energy) {
   return Math.min(100, Math.max(0, numericEnergy));
 }
 
+function hasCompleteMetrics(metrics) {
+  return Boolean(metrics && typeof metrics === "object") && requiredMetricFields.every(function (field) {
+    return Object.prototype.hasOwnProperty.call(metrics, field) && metrics[field] !== null && metrics[field] !== undefined;
+  });
+}
+
 function renderMetrics(metrics) {
   var container = getElement("metric-grid");
   var definitions = [
@@ -85,7 +100,7 @@ function renderMetrics(metrics) {
     return;
   }
 
-  if (!metrics || typeof metrics !== "object") {
+  if (!hasCompleteMetrics(metrics)) {
     showEmpty(container, "Network metrics are unavailable.");
     return;
   }
@@ -117,6 +132,7 @@ function renderNodes(nodes) {
     var card = createElement("article", "node-card");
     var energy = clampEnergy(node && node.energy);
     var energyBar = createElement("div", "energy-bar");
+    energyBar.style.setProperty("--energy", String(energy) + "%");
     energyBar.setAttribute("role", "progressbar");
     energyBar.setAttribute("aria-valuenow", String(energy));
     energyBar.setAttribute("aria-valuemin", "0");
@@ -205,7 +221,7 @@ function renderDashboard(data) {
   var updatedAt = getElement("last-updated");
   var emptyState = getElement("empty-state");
   var hasUsableData = Boolean(
-    snapshot.metrics ||
+    hasCompleteMetrics(snapshot.metrics) ||
     (Array.isArray(snapshot.nodes) && snapshot.nodes.length) ||
     (Array.isArray(snapshot.routes) && snapshot.routes.length)
   );

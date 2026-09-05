@@ -37,6 +37,16 @@ void normalAggregation() {
     assert(nearlyEqual(result.packetDeliveryRatio, 0.75));
 }
 
+void positiveAttemptedPacketsCapOverDelivery() {
+    SimulationMetrics metrics;
+    metrics.recordRound({1, 5, 8, {cooperativeNode()}});
+
+    SimulationMetricsResult result = metrics.getResult();
+    assert(result.totalAttemptedPackets == 5);
+    assert(result.totalDeliveredPackets == 5);
+    assert(nearlyEqual(result.packetDeliveryRatio, 1.0));
+}
+
 void averagesResidualEnergyAcrossAllNodeObservations() {
     SimulationMetrics metrics;
     metrics.recordRound({1, 4, 3, {makeNode(1, 80.0, NodeStrategy::Cooperative),
@@ -64,6 +74,10 @@ void countsSelfishEventsAndStrategyBuckets() {
     assert(result.cooperative.nodeObservations == 1);
     assert(result.selfish.nodeObservations == 1);
     assert(result.selfish.selfishEvents == 1);
+    assert(nearlyEqual(result.cooperative.totalResidualEnergy, 80.0));
+    assert(nearlyEqual(result.cooperative.averageResidualEnergy(), 80.0));
+    assert(nearlyEqual(result.selfish.totalResidualEnergy, 50.0));
+    assert(nearlyEqual(result.selfish.averageResidualEnergy(), 50.0));
 }
 
 void emptyInputHasZeroesAndUnknownLifetime() {
@@ -92,6 +106,7 @@ void emptyStrategyBucketHasZeroAverage() {
 
 int main() {
     normalAggregation();
+    positiveAttemptedPacketsCapOverDelivery();
     averagesResidualEnergyAcrossAllNodeObservations();
     lifetimeIsSmallestRoundWithDepletedNode();
     countsSelfishEventsAndStrategyBuckets();

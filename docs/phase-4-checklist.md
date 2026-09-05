@@ -25,3 +25,8 @@
 - Persistence for simulation observations and results.
 - Richer packet simulation with per-packet paths, loss causes, and timing.
 - Dynamic-programming planning and the remaining later phases.
+
+## Documented Input-Boundary Concerns
+
+- Packet totals, observation counts, and selfish-event counts use signed `int` accumulators. Extremely large or unbounded inputs could overflow those counters; Phase 4 intentionally retains the existing `int` API and does not add checked or wider arithmetic.
+- `-1` denotes an unknown network lifetime. If a caller records a depleted node in round `-1`, that value is indistinguishable from the no-depletion sentinel. Phase 4 callers must provide non-negative round numbers; changing the result representation would be an API redesign outside this scope.

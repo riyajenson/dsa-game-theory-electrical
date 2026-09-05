@@ -43,7 +43,7 @@ g++ -std=c++11 tests/SimulationMetricsTests.cpp src/GameTheoryEngine.cpp src/Sim
 ## Save Demo Output
 
 ```powershell
-.\game_theory_demo.exe | Tee-Object -FilePath sample-output\game-theory-demo-output.txt
+.\game_theory_demo.exe | Out-File -FilePath sample-output\game-theory-demo-output.txt -Encoding utf8
 ```
 
 ## Current Scope

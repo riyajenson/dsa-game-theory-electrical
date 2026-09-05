@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Energy-Aware Sensor Network Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <p>Operations dashboard</p>
+      <h1>Energy-Aware Sensor Network</h1>
+      <p>Monitor network health, routing, and energy-saving strategies.</p>
+      <p>Status: <span id="last-updated">Awaiting update</span></p>
+    </header>
+
+    <main>
+      <section aria-labelledby="metrics-heading">
+        <h2 id="metrics-heading">Network metrics</h2>
+        <div id="metric-grid" aria-live="polite">
+          <p>Metrics will appear here when data is available.</p>
+        </div>
+      </section>
+
+      <section aria-labelledby="nodes-heading">
+        <h2 id="nodes-heading">Node state</h2>
+        <div id="node-grid" aria-live="polite">
+          <p>Node states will appear here when data is available.</p>
+        </div>
+      </section>
+
+      <section aria-labelledby="routes-heading">
+        <h2 id="routes-heading">Active routes</h2>
+        <div id="route-list" aria-live="polite">
+          <p>Routes will appear here when data is available.</p>
+        </div>
+      </section>
+
+      <section aria-labelledby="strategies-heading">
+        <h2 id="strategies-heading">Strategy comparison</h2>
+        <div id="strategy-bars" aria-live="polite">
+          <p>Strategy comparisons will appear here when data is available.</p>
+        </div>
+      </section>
+
+      <section id="empty-state" aria-labelledby="empty-state-heading">
+        <h2 id="empty-state-heading">No dashboard data</h2>
+        <p>The network has not reported data yet.</p>
+      </section>
+    </main>
+
+    <noscript>
+      JavaScript is required to load live network dashboard data.
+    </noscript>
+  </body>
+</html>

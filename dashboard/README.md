@@ -4,13 +4,9 @@ This dashboard is a dependency-free static frontend for the energy-aware sensor 
 
 ## Local Preview
 
-For a basic local preview, open `dashboard/index.html` directly in a browser.
+For a no-install local preview, open `dashboard/index.html` directly in a browser.
 
-Optionally, serve the dashboard locally with a built-in tool:
-
-```powershell
-npx --yes serve dashboard
-```
+If an already-installed local static-file server is preferred, point it at the `dashboard` directory. The dashboard itself does not require Node.js, a package manager, or a build step.
 
 ## Current Data Scope
 

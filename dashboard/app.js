@@ -66,7 +66,7 @@ function showEmpty(container, message) {
     return;
   }
 
-  container.replaceChildren(createElement("p", "is-muted", message));
+  container.replaceChildren(createElement(container.tagName === "UL" ? "li" : "p", "is-muted", message));
 }
 
 function clampEnergy(energy) {
@@ -77,6 +77,31 @@ function clampEnergy(energy) {
   }
 
   return Math.min(100, Math.max(0, numericEnergy));
+}
+
+function createProgressTrack(trackClass, fillClass, value, label) {
+  var progress = createElement("div", trackClass);
+  var fill = createElement("span", fillClass);
+  var numericValue = clampEnergy(value);
+
+  progress.style.setProperty("--energy", String(numericValue) + "%");
+  progress.setAttribute("role", "progressbar");
+  progress.setAttribute("aria-valuenow", String(numericValue));
+  progress.setAttribute("aria-valuemin", "0");
+  progress.setAttribute("aria-valuemax", "100");
+  progress.setAttribute("aria-label", label);
+  progress.append(fill);
+  return progress;
+}
+
+function formatDeliveryRatio(value) {
+  return clampEnergy(value).toFixed(2) + "%";
+}
+
+function formatRouteCost(cost) {
+  var numericCost = Number(cost);
+
+  return Number.isFinite(numericCost) ? numericCost.toFixed(2) : "Unavailable";
 }
 
 function hasCompleteMetrics(metrics) {
@@ -108,8 +133,25 @@ function renderMetrics(metrics) {
   var cards = definitions.map(function (definition) {
     var card = createElement("article", "metric-card");
     var label = createElement("p", "metric-label", definition[0]);
-    var value = createElement("p", "metric-value", String(metrics[definition[1]] ?? "Unavailable"));
+    var metricValue = metrics[definition[1]];
+    var value = createElement(
+      "p",
+      "metric-value",
+      definition[1] === "deliveryRatio" ? formatDeliveryRatio(metricValue) : String(metricValue ?? "Unavailable")
+    );
     card.append(label, value);
+
+    if (definition[1] === "deliveryRatio") {
+      card.append(
+        createElement(
+          "p",
+          "packet-delivery-summary",
+          String(metrics.deliveredPackets) + " of " + String(metrics.attemptedPackets) + " packets delivered"
+        ),
+        createProgressTrack("packet-delivery", "packet-delivery-fill", metricValue, "Packet delivery " + formatDeliveryRatio(metricValue))
+      );
+    }
+
     return card;
   });
 
@@ -129,22 +171,25 @@ function renderNodes(nodes) {
   }
 
   var cards = nodes.map(function (node) {
-    var card = createElement("article", "node-card");
     var energy = clampEnergy(node && node.energy);
-    var energyBar = createElement("div", "energy-bar");
-    energyBar.style.setProperty("--energy", String(energy) + "%");
-    energyBar.setAttribute("role", "progressbar");
-    energyBar.setAttribute("aria-valuenow", String(energy));
-    energyBar.setAttribute("aria-valuemin", "0");
-    energyBar.setAttribute("aria-valuemax", "100");
-    energyBar.setAttribute("aria-label", "Node " + String(node && node.id) + " energy");
-    energyBar.textContent = String(energy) + "% energy";
+    var isSuspicious = Boolean(node && node.suspicious);
+    var isLowEnergy = energy <= 20;
+    var isAlert = isSuspicious || isLowEnergy;
+    var card = createElement("article", "node-card" + (isAlert ? " is-alert" : ""));
+    var statusText = isSuspicious ? "Status: Suspicious" : (isLowEnergy ? "Status: Low energy" : "Status: Stable");
+    var energyBar = createProgressTrack(
+      "energy-bar" + (isLowEnergy ? " is-alert" : ""),
+      "energy-fill",
+      energy,
+      "Node " + String(node && node.id) + " energy"
+    );
 
     card.append(
       createElement("h3", "node-title", "Node " + String(node && node.id)),
       createElement("p", "node-strategy", "Strategy: " + String(node && node.strategy)),
       createElement("p", "node-reputation", "Reputation: " + String(node && node.reputation)),
-      createElement("p", "node-suspicious", "Suspicious: " + (node && node.suspicious ? "Yes" : "No")),
+      createElement("p", "status-badge" + (isAlert ? " is-alert" : ""), statusText),
+      createElement("p", "energy-label", String(energy) + "% energy"),
       energyBar
     );
     return card;
@@ -166,12 +211,12 @@ function renderRoutes(routes) {
   }
 
   var cards = routes.map(function (route) {
-    var card = createElement("article", "route-card");
+    var card = createElement("li", "route-card");
     var path = Array.isArray(route && route.path) ? route.path.join(" → ") : "Unavailable";
     card.append(
       createElement("h3", "route-label", String(route && route.label)),
       createElement("p", "route-path", path),
-      createElement("p", "route-cost", "Cost: " + String(route && route.cost))
+      createElement("p", "route-cost", "Cost: " + formatRouteCost(route && route.cost))
     );
     return card;
   });
@@ -208,7 +253,8 @@ function renderStrategyBars(nodes) {
     bar.append(
       createElement("h3", "strategy-name", strategy),
       createElement("p", "strategy-count", String(summary.count) + " node" + (summary.count === 1 ? "" : "s")),
-      createElement("p", "strategy-average", "Average energy: " + averageEnergy.toFixed(2) + "%")
+      createElement("p", "strategy-average", "Average energy: " + averageEnergy.toFixed(2) + "%"),
+      createProgressTrack("strategy-track", "strategy-fill", averageEnergy, strategy + " average energy")
     );
     return bar;
   });

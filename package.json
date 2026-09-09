@@ -1,0 +1,10 @@
+{
+  "name": "dsa-game-theory-electrical",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local end-to-end energy-aware sensor network dashboard",
+  "scripts": {
+    "start": "node server.js",
+    "test:server": "node --test tests/server.test.js"
+  }
+}

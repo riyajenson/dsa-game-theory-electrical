@@ -3,55 +3,98 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Energy-Aware Sensor Network Dashboard</title>
+    <meta name="theme-color" content="#07131f">
+    <title>GridMind — Sensor Network Lab</title>
     <link rel="stylesheet" href="styles.css">
     <script src="app.js" defer></script>
   </head>
   <body>
-    <header>
-      <p>Operations dashboard</p>
-      <h1>Energy-Aware Sensor Network</h1>
-      <p>Monitor network health, routing, and energy-saving strategies.</p>
-      <p>Status: <span id="last-updated">Awaiting update</span></p>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Distributed intelligence lab</p>
+        <h1>Grid<span>Mind</span></h1>
+        <p class="hero-copy">Game-theoretic routing for energy-constrained sensor networks.</p>
+      </div>
+      <div class="system-state">
+        <span class="pulse" aria-hidden="true"></span>
+        <div>
+          <strong>Simulation engine</strong>
+          <span id="last-updated">Connecting to local C++ core…</span>
+        </div>
+      </div>
     </header>
 
     <main>
-      <section aria-labelledby="metrics-heading">
-        <h2 id="metrics-heading">Network metrics</h2>
-        <div id="metric-grid" aria-live="polite">
-          <p>Metrics will appear here when data is available.</p>
+      <section class="control-panel full-width" aria-labelledby="controls-heading">
+        <div>
+          <p class="eyebrow">Experiment controls</p>
+          <h2 id="controls-heading">Run a network scenario</h2>
         </div>
+        <form id="simulation-form">
+          <label>Rounds
+            <input id="rounds" name="rounds" type="number" min="1" max="20" value="5" required>
+          </label>
+          <label>Node strategy
+            <select id="strategy" name="strategy">
+              <option value="mixed">Mixed network</option>
+              <option value="cooperative">All cooperative</option>
+              <option value="selfish">All selfish</option>
+            </select>
+          </label>
+          <button id="run-simulation" type="submit">Run simulation <span aria-hidden="true">→</span></button>
+        </form>
+        <p id="simulation-status" class="status-line" role="status" aria-live="polite">Ready to simulate.</p>
       </section>
 
-      <section aria-labelledby="nodes-heading">
-        <h2 id="nodes-heading">Node state</h2>
-        <div id="node-grid" aria-live="polite">
-          <p>Node states will appear here when data is available.</p>
+      <section class="full-width" aria-labelledby="metrics-heading">
+        <div class="section-title"><div><p class="eyebrow">Live telemetry</p><h2 id="metrics-heading">Network metrics</h2></div></div>
+        <div id="metric-grid" class="metric-grid" aria-live="polite"><p class="is-muted">Metrics appear after the simulation runs.</p></div>
+      </section>
+
+      <section class="topology-panel" aria-labelledby="topology-heading">
+        <div class="section-title">
+          <div><p class="eyebrow">Graph routing</p><h2 id="topology-heading">Network topology</h2></div>
+          <span class="legend"><i></i> Healthy <i class="alert-dot"></i> At risk</span>
+        </div>
+        <div class="map-shell">
+          <svg id="network-map" viewBox="0 0 640 380" role="img" aria-labelledby="topology-heading topology-description">
+            <desc id="topology-description">Sensor nodes and their weighted communication links.</desc>
+          </svg>
         </div>
       </section>
 
       <section aria-labelledby="routes-heading">
-        <h2 id="routes-heading">Active routes</h2>
-        <ul id="route-list" aria-live="polite">
-          <li>Routes will appear here when data is available.</li>
-        </ul>
+        <div class="section-title"><div><p class="eyebrow">Path intelligence</p><h2 id="routes-heading">Active routes</h2></div></div>
+        <ul id="route-list" aria-live="polite"><li class="is-muted">Routes appear after the simulation runs.</li></ul>
+      </section>
+
+      <section class="full-width" aria-labelledby="nodes-heading">
+        <div class="section-title"><div><p class="eyebrow">Fleet state</p><h2 id="nodes-heading">Sensor nodes</h2></div></div>
+        <div id="node-grid" aria-live="polite"><p class="is-muted">Node states appear after the simulation runs.</p></div>
+      </section>
+
+      <section aria-labelledby="planner-heading">
+        <div class="section-title"><div><p class="eyebrow">Dynamic programming</p><h2 id="planner-heading">Planner comparison</h2></div></div>
+        <div id="planner-comparison" aria-live="polite"><p class="is-muted">Planner results appear after the simulation runs.</p></div>
       </section>
 
       <section aria-labelledby="strategies-heading">
-        <h2 id="strategies-heading">Strategy comparison</h2>
-        <div id="strategy-bars" aria-live="polite">
-          <p>Strategy comparisons will appear here when data is available.</p>
-        </div>
+        <div class="section-title"><div><p class="eyebrow">Behavior profile</p><h2 id="strategies-heading">Strategy comparison</h2></div></div>
+        <div id="strategy-bars" aria-live="polite"><p class="is-muted">Strategy results appear after the simulation runs.</p></div>
       </section>
 
-      <section id="empty-state" aria-labelledby="empty-state-heading">
-        <h2 id="empty-state-heading">No dashboard data</h2>
-        <p>The network has not reported data yet.</p>
+      <section class="full-width" aria-labelledby="history-heading">
+        <div class="section-title"><div><p class="eyebrow">Round trace</p><h2 id="history-heading">Simulation history</h2></div></div>
+        <div id="history-list" class="history-list" aria-live="polite"><p class="is-muted">Round history appears after the simulation runs.</p></div>
+      </section>
+
+      <section id="empty-state" class="full-width" aria-labelledby="empty-state-heading">
+        <h2 id="empty-state-heading">Waiting for network data</h2>
+        <p>Run a simulation to activate live telemetry.</p>
       </section>
     </main>
 
-    <noscript>
-      JavaScript is required to load this deterministic local snapshot data.
-    </noscript>
+    <footer><span>GridMind / Phase 6</span><span>C++ core · Dijkstra routing · DP energy planning</span></footer>
+    <noscript>JavaScript is required to connect this dashboard to the local simulation API.</noscript>
   </body>
 </html>

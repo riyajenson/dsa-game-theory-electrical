@@ -126,7 +126,7 @@ test("serves dashboard and rejects unknown paths", async () => {
   };
   const indexResponse = await request(createServer(options), "GET", "/");
   assert.equal(indexResponse.status, 200);
-  assert.match(indexResponse.text, /Energy-Aware Sensor Network/);
+  assert.match(indexResponse.text, /Grid<span>Mind/);
 
   const missingResponse = await request(createServer(options), "GET", "/missing");
   assert.equal(missingResponse.status, 404);

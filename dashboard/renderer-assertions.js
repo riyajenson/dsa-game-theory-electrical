@@ -47,12 +47,29 @@ FakeElement.prototype.setAttribute = function (name, value) {
 
 function createDocument() {
   var elements = {};
-  ["metric-grid", "node-grid", "route-list", "strategy-bars", "last-updated", "empty-state"].forEach(function (id) {
-    elements[id] = new FakeElement(id === "route-list" ? "ul" : "div");
+  [
+    "metric-grid",
+    "node-grid",
+    "route-list",
+    "strategy-bars",
+    "last-updated",
+    "empty-state",
+    "network-map",
+    "history-list",
+    "planner-comparison",
+    "simulation-status",
+    "run-simulation"
+  ].forEach(function (id) {
+    elements[id] = new FakeElement(
+      id === "route-list" ? "ul" : (id === "network-map" ? "svg" : "div")
+    );
   });
 
   return {
     createElement: function (tagName) {
+      return new FakeElement(tagName);
+    },
+    createElementNS: function (namespace, tagName) {
       return new FakeElement(tagName);
     },
     getElementById: function (id) {
@@ -135,6 +152,38 @@ function assertRendererBehavior() {
   assert.match(elements["route-list"].textContent, /unavailable/, "route empty state must remain safe");
   assert.strictEqual(elements["route-list"].children[0].tagName, "LI", "route empty state must retain semantic list items");
   assert.match(elements["strategy-bars"].textContent, /unavailable/, "strategy empty state must remain safe");
+
+  renderer.renderTopology(
+    renderer.dashboardData.nodes,
+    [
+      { source: 1, target: 2, weight: 1 },
+      { source: 2, target: 5, weight: 1 }
+    ]
+  );
+  assert.match(elements["network-map"].textContent, /Node 1/, "topology needs visible node labels");
+  assert.match(elements["network-map"].textContent, /1\.00/, "topology needs visible link weights");
+
+  renderer.renderHistory([
+    { round: 1, attemptedPackets: 5, deliveredPackets: 4, averageEnergy: 70.25 }
+  ]);
+  assert.match(elements["history-list"].textContent, /Round 1/, "history needs round labels");
+  assert.match(elements["history-list"].textContent, /4 of 5/, "history needs packet outcomes");
+
+  renderer.renderPlannerComparison({
+    planned: {
+      actions: ["RELAY", "SLEEP"],
+      totalUtility: 12.5,
+      remainingEnergy: 42
+    },
+    greedy: {
+      actions: ["RELAY", "RELAY"],
+      totalUtility: 10,
+      remainingEnergy: 39
+    },
+    recommendation: "DP plan"
+  });
+  assert.match(elements["planner-comparison"].textContent, /DP plan/, "planner recommendation must be text");
+  assert.match(elements["planner-comparison"].textContent, /12\.50/, "planner totals need two decimals");
 }
 
 function assertStaticDashboardRequirements() {
@@ -143,13 +192,67 @@ function assertStaticDashboardRequirements() {
   var readme = fs.readFileSync(path.join(__dirname, "README.md"), "utf8");
 
   assert.match(index, /<ul id="route-list"/, "route list must keep its stable ID on semantic list markup");
-  assert.match(index, /deterministic local snapshot data/i, "no-script copy must describe local deterministic data");
-  assert.match(styles, /main\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s, "desktop main needs two columns");
-  assert.match(styles, /@media \(max-width: 42rem\)[\s\S]*main\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/, "narrow main needs one column");
+  assert.match(index, /id="simulation-form"/, "dashboard needs a simulation form");
+  assert.match(index, /id="rounds"/, "dashboard needs a rounds input");
+  assert.match(index, /id="strategy"/, "dashboard needs a strategy selector");
+  assert.match(index, /id="simulation-status"/, "dashboard needs a live status region");
+  assert.match(index, /<svg[^>]+id="network-map"/, "dashboard needs an accessible topology canvas");
+  assert.match(index, /id="history-list"/, "dashboard needs round history");
+  assert.match(index, /id="planner-comparison"/, "dashboard needs planner comparison");
+  assert.match(index, /local simulation API/i, "no-script copy must describe the local API requirement");
+  assert.match(styles, /main\s*\{[^}]*grid-template-columns:[^;]+\s+[^;]+;/s, "desktop main needs two columns");
+  assert.match(styles, /@media \(max-width: 980px\)[\s\S]*main\s*\{[^}]*grid-template-columns:\s*1fr/, "narrow main needs one column");
   assert.match(styles, /\.energy-fill,[\s\S]*?\.strategy-fill\s*\{[^}]*position:\s*absolute/s, "bright fills must occupy their tracks without covering labels");
   assert.ok(!/\bnpx\b/i.test(readme), "dashboard docs must not suggest a tool-installing preview command");
 }
 
-assertRendererBehavior();
-assertStaticDashboardRequirements();
-console.log("Dashboard renderer/static assertions passed.");
+async function assertRequestBehavior() {
+  var loaded = loadRenderer();
+  var renderer = loaded.renderer;
+  var elements = loaded.document.elements;
+  var requestInput;
+  var releaseResponse;
+  var pending = renderer.requestSimulation(
+    { rounds: 3, strategy: "mixed" },
+    function (url, options) {
+      requestInput = JSON.parse(options.body);
+      return new Promise(function (resolve) {
+        releaseResponse = resolve;
+      });
+    }
+  );
+  assert.deepStrictEqual(requestInput, { rounds: 3, strategy: "mixed" }, "request must forward selected controls");
+  assert.strictEqual(elements["run-simulation"].disabled, true, "run button must disable while busy");
+  releaseResponse({
+    ok: true,
+    json: async function () {
+      return Object.assign({}, renderer.dashboardData, {
+        links: [],
+        history: [],
+        plannerComparison: null
+      });
+    }
+  });
+  await pending;
+  assert.strictEqual(elements["run-simulation"].disabled, false, "run button must re-enable after success");
+
+  var previousMetrics = elements["metric-grid"].textContent;
+  await renderer.requestSimulation(
+    { rounds: 2, strategy: "selfish" },
+    function () {
+      return Promise.reject(new Error("engine offline"));
+    }
+  ).catch(function () {});
+  assert.strictEqual(elements["metric-grid"].textContent, previousMetrics, "failed requests must preserve prior results");
+  assert.match(elements["simulation-status"].textContent, /engine offline/, "request errors must remain visible");
+}
+
+(async function () {
+  assertRendererBehavior();
+  assertStaticDashboardRequirements();
+  await assertRequestBehavior();
+  console.log("Dashboard renderer/static assertions passed.");
+}()).catch(function (error) {
+  console.error(error);
+  process.exitCode = 1;
+});

@@ -56,6 +56,23 @@ void clampsRoundsAndStartingEnergy() {
     assert(result.actions.size() == 20);
     assert(result.remainingEnergy <= 100.0);
 }
+
+void reportedEnergyMatchesReturnedActionSequence() {
+    EnergyPlanner planner;
+    GameTheoryEngine engine;
+    SensorNode node = {3, 73.0, 1.0, 5, 5, 0, NodeStrategy::Cooperative};
+    DecisionContext context = relayContext();
+    context.nodeHasOwnData = true;
+    EnergyPlan result = planner.plan(node, context, 5);
+
+    for (NodeAction action : result.actions) {
+        const bool delivered =
+            action == NodeAction::Relay || action == NodeAction::Transmit;
+        engine.applyActionResult(node, action, delivered);
+    }
+
+    assert(nearlyEqual(result.remainingEnergy, node.energy));
+}
 }
 
 int main() {
@@ -63,6 +80,7 @@ int main() {
     returnsOneActionPerRoundAndValidEnergy();
     dynamicPlanDoesNotUnderperformGreedy();
     clampsRoundsAndStartingEnergy();
+    reportedEnergyMatchesReturnedActionSequence();
     std::cout << "Energy planner tests passed.\n";
     return 0;
 }

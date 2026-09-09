@@ -1,15 +1,7 @@
-# Phase 5 Dashboard
+# GridMind Dashboard
 
-This dashboard is a dependency-free static frontend for the energy-aware sensor network project. It displays a deterministic snapshot of the Phase 2 routing results and Phase 4 simulation metrics.
+The dashboard loads simulation results from `POST /api/simulations`. Opening `index.html` directly is unsupported because a file URL has no simulation API.
 
-## Local Preview
+In PowerShell, run `npm.cmd start` from the repository root and open `http://127.0.0.1:3000`.
 
-For a no-install local preview, open `dashboard/index.html` directly in a browser.
-
-If an already-installed local static-file server is preferred, point it at the `dashboard` directory. The dashboard itself does not require Node.js, a package manager, or a build step.
-
-## Current Data Scope
-
-The displayed data is deterministic and mirrors the Phase 2 route output and Phase 4 simulation-metrics output. It does not fetch data or require a backend, package installation, or build step.
-
-Future live-data integration is not implemented. Persistent simulation data, backend integration, and deployment are deferred work.
+The interface includes scenario controls, live telemetry, a weighted topology map, shortest and energy-aware routes, node health, DP-versus-greedy planning, strategy energy bars, and round history. It has no runtime frontend dependencies.

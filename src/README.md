@@ -1,52 +1,12 @@
-# Source Module
+# C++ Simulation Core
 
-## Purpose
+The source layer owns all domain behavior and has no HTTP dependency.
 
-This folder contains the C++ implementation for the Phase 1 game-theory decision engine, the Phase 2 graph routing engine, and the Phase 4 simulation metrics engine. Phase 5 adds a dependency-free static dashboard; see [`dashboard/README.md`](../dashboard/README.md) for local preview and scope details.
+- `GameTheoryEngine`: action utilities, action effects, reputation, and selfish-node detection.
+- `NetworkGraph`: weighted graph plus shortest and energy-aware routes.
+- `EnergyPlanner`: memoized finite-horizon DP and greedy comparison.
+- `SimulationMetrics`: delivery, energy, lifetime, and selfish-event aggregation.
+- `SimulationRunner`: deterministic five-node scenario and dashboard JSON.
+- `simulation_cli.cpp`: CLI validation and JSON output.
 
-## Files
-
-- `GameTheoryEngine.h` defines the sensor node data model, strategies, actions, and decision engine interface.
-- `GameTheoryEngine.cpp` implements utility calculation, action selection, reputation updates, and selfish-node detection.
-- `NetworkGraph.h` defines the weighted sensor network graph and routing result interfaces.
-- `NetworkGraph.cpp` implements adjacency-list graph storage, Dijkstra shortest path, and energy-aware route selection.
-- `SimulationMetrics.h` defines explicit round observations and result structures for packet, energy, lifetime, and strategy metrics.
-- `SimulationMetrics.cpp` aggregates deterministic round observations into Phase 4 metrics.
-- `main.cpp` runs the repeated-game, graph-routing, and Phase 4 simulation-metrics demos.
-
-## Compile
-
-From the project root:
-
-```powershell
-g++ -std=c++11 src/main.cpp src/GameTheoryEngine.cpp src/NetworkGraph.cpp src/SimulationMetrics.cpp -o game_theory_demo.exe
-```
-
-## Run
-
-```powershell
-.\game_theory_demo.exe
-```
-
-## Run Tests
-
-```powershell
-g++ -std=c++11 tests/NetworkGraphTests.cpp src/GameTheoryEngine.cpp src/NetworkGraph.cpp -o network_graph_tests.exe
-.\network_graph_tests.exe
-```
-
-```powershell
-g++ -std=c++11 tests/SimulationMetricsTests.cpp src/GameTheoryEngine.cpp src/SimulationMetrics.cpp -o simulation_metrics_tests.exe
-.\simulation_metrics_tests.exe
-```
-
-## Save Demo Output
-
-```powershell
-.\game_theory_demo.exe | Out-File -FilePath sample-output\game-theory-demo-output.txt -Encoding utf8
-```
-
-## Current Scope
-
-The current module supports Phase 1 game-theory decisions, Phase 2 graph-based routing, Phase 4 deterministic simulation metrics, and the Phase 5 local dashboard. Dynamic programming planning, live dashboard data, persistent simulation data, and richer packet-level simulation remain planned for later phases.
-
+Use `npm.cmd test` from PowerShell to compile and run every suite, or `npm.cmd run check` to compile the dashboard CLI only.

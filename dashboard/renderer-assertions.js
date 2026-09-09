@@ -70,6 +70,16 @@ function createDocument() {
       return new FakeElement(tagName);
     },
     createElementNS: function (namespace, tagName) {
+      var element = new FakeElement(tagName);
+      delete element.className;
+      Object.defineProperty(element, "className", {
+        get: function () {
+          return { baseVal: element.attributes.class || "" };
+        }
+      });
+      return element;
+    },
+    createElementNS: function (namespace, tagName) {
       return new FakeElement(tagName);
     },
     getElementById: function (id) {
@@ -92,7 +102,10 @@ function findAll(element, predicate, found) {
 }
 
 function hasClass(element, className) {
-  return element.className.split(/\s+/).indexOf(className) !== -1;
+  var value = typeof element.className === "string"
+    ? element.className
+    : (element.attributes.class || "");
+  return value.split(/\s+/).indexOf(className) !== -1;
 }
 
 function loadRenderer() {

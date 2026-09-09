@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <map>
+#include <tuple>
 #include <utility>
 
 namespace {
@@ -38,7 +39,7 @@ struct PlanState {
     SensorNode node;
 };
 
-typedef std::pair<int, int> MemoKey;
+typedef std::tuple<int, int, int, int, int, int> MemoKey;
 
 PlanState solve(
     const GameTheoryEngine& engine,
@@ -52,7 +53,14 @@ PlanState solve(
         return {{}, 0.0, node};
     }
 
-    MemoKey key(round, static_cast<int>(node.energy + 0.5));
+    MemoKey key(
+        round,
+        static_cast<int>(node.energy * 10.0 + 0.5),
+        static_cast<int>(node.reputation * 100.0 + 0.5),
+        node.relayRequests,
+        node.successfulRelays,
+        node.selfishDecisions
+    );
     std::map<MemoKey, PlanState>::const_iterator cached = memo.find(key);
     if (cached != memo.end()) {
         return cached->second;

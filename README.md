@@ -1,36 +1,33 @@
-\# DSA Game Theory Project
+# GridMind
 
+GridMind is an end-to-end demonstration of game-theoretic, energy-aware routing in a distributed sensor network. The C++ core models node decisions, Dijkstra routing, dynamic-programming energy planning, and multi-round metrics. A local Node.js API runs that simulation and feeds an interactive browser dashboard.
 
+## Run the dashboard
 
-\## Title
+Requirements: Node.js 18 or newer and g++ with C++11 support.
 
+```powershell
+npm.cmd start
+```
 
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The launcher compiles the simulation CLI when needed, starts the local API, and serves the dashboard. Choose 1–20 rounds and a cooperative, selfish, or mixed strategy.
 
-Game-Theoretic Simulation of Energy-Aware Routing in Distributed Sensor Networks
+## Test everything
 
+```powershell
+npm.cmd test
+```
 
+This compiles and runs the planner, routing, metrics, and simulation suites, followed by the API, launcher, and dashboard tests.
 
-\## Summary
+## Architecture
 
+- `src/GameTheoryEngine.*`: utility-based node decisions and reputation.
+- `src/NetworkGraph.*`: weighted graph and shortest/energy-aware routes.
+- `src/EnergyPlanner.*`: memoized finite-horizon DP and greedy comparison.
+- `src/SimulationMetrics.*`: packet, energy, lifetime, and strategy aggregation.
+- `src/SimulationRunner.*`: deterministic scenario and JSON contract.
+- `server.js`: dependency-free local API and static server.
+- `dashboard/`: responsive live dashboard.
 
-
-This is a purely software-based DSA project implemented mainly in C++. It simulates a distributed sensor network as a weighted graph, where each sensor node behaves as a game-theoretic player with limited energy. Nodes decide whether to transmit, relay, sleep, or stay idle based on utility, reputation, energy cost, and network contribution.
-
-
-
-\## Phase Branches
-
-
-
-\- `phase-1`: project foundation, documentation, and game-theory module
-
-\- `phase-2`: graph representation and routing engine
-
-\- `phase-3`: DP-based energy decision planner
-
-\- `phase-4`: simulation metrics and strategy comparison
-
-\- `phase-5`: dashboard and visualization
-
-\- `phase-6`: final report and polish
-
+This release is intentionally local-only and stateless.

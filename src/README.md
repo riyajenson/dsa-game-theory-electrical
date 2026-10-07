@@ -8,5 +8,7 @@ The source layer owns all domain behavior and has no HTTP dependency.
 - `SimulationMetrics`: delivery, energy, lifetime, and selfish-event aggregation.
 - `SimulationRunner`: deterministic five-node scenario and dashboard JSON.
 - `simulation_cli.cpp`: CLI validation and JSON output.
+- `GameSession`: seeded player turn replay, AI decisions, action previews, scoring, and game JSON.
+- `game_cli.cpp`: replay CLI for the versioned local game API.
 
-Use `npm.cmd test` from PowerShell to compile and run every suite, or `npm.cmd run check` to compile the dashboard CLI only.
+Use `npm.cmd test` from PowerShell to compile and run every suite, or `npm.cmd run check` to compile both CLIs.

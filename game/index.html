@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c1425">
+  <title>Signalbound — GridMind</title>
+  <link rel="stylesheet" href="/game.css">
+  <script src="/game.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">✦</span><div><span class="overline">GRIDMIND / FIELD OPS</span><h1>Signalbound<span class="cursor">_</span></h1></div></div>
+      <nav aria-label="Primary"><a class="nav-active" href="/">PLAY</a><a href="/dashboard">ANALYSIS ↗</a></nav>
+      <div class="header-right"><span class="live-dot"></span><span>LOCAL C++ ENGINE</span></div>
+    </header>
+
+    <main class="layout">
+      <section class="mission-bar" aria-label="Mission status">
+        <div><span class="overline">MISSION 01 / THE LAST RELAY</span><strong>Keep the network alive.</strong></div>
+        <div class="mission-objective">DELIVER <b id="goal-count">0 / 5</b> PACKETS <span class="divider">/</span> TRUST <b id="trust-goal">55%+</b></div>
+        <div class="seed-wrap">SEED <span id="seed-value">0017</span><button id="new-seed" type="button" title="Start a new seeded run">↻ NEW</button></div>
+      </section>
+
+      <section class="world-panel" aria-labelledby="world-heading">
+        <div class="panel-top"><div><span class="overline">SECTOR 07 / LIVE MAP</span><h2 id="world-heading">The relay grid</h2></div><div class="round-chip">ROUND <span id="round-value">1</span> <i>/</i> 8</div></div>
+        <div class="map-frame"><svg id="game-map" viewBox="0 0 640 416" role="img" aria-label="Sensor network map showing towers, links, routes, and packet flow"></svg><div class="map-corner map-corner-a"></div><div class="map-corner map-corner-b"></div></div>
+        <div class="map-footer"><span><i class="key key-short"></i> SHORTEST</span><span><i class="key key-aware"></i> ENERGY AWARE</span><span><i class="key key-danger"></i> INTERFERENCE</span><span class="map-hint">HOVER A TOWER FOR STATUS</span></div>
+      </section>
+
+      <aside class="side-panel">
+        <section class="player-card" aria-label="Player sensor status">
+          <div class="card-header"><span class="overline">YOUR SENSOR / NODE 01</span><span class="online-pill">● ONLINE</span></div>
+          <div class="player-identity"><div class="avatar" aria-hidden="true"><span class="antenna"></span><span class="head"><i></i><i></i></span><span class="body-unit"></span><span class="feet"></span></div><div><h2>SPARK-01</h2><p>Courier · Player controlled</p></div></div>
+          <div class="stat"><div class="stat-label"><span>BATTERY</span><strong id="energy-value">28.0 / 100</strong></div><div class="track"><span id="energy-bar" class="fill energy"></span></div></div>
+          <div class="stat"><div class="stat-label"><span>REPUTATION</span><strong id="reputation-value">65%</strong></div><div class="track"><span id="reputation-bar" class="fill reputation"></span></div></div>
+          <div class="mini-stats"><div><span>DELIVERED</span><strong id="delivered-value">0</strong></div><div><span>RATIO</span><strong id="ratio-value">0%</strong></div><div><span>SCORE</span><strong id="score-value">000</strong></div></div>
+        </section>
+
+        <section class="dispatch-card" aria-labelledby="dispatch-heading">
+          <div class="card-header"><span class="overline">INCOMING REQUEST</span><span class="blink">● LIVE</span></div>
+          <h2 id="dispatch-heading">Choose your move</h2>
+          <p id="packet-goal">A packet needs a route through the grid. Every turn costs something.</p>
+          <div id="action-grid" class="action-grid"></div>
+          <div class="preview-box"><span class="overline">NEXT TURN / ENGINE PREVIEW</span><p id="preview-text">Select an action to inspect its outcome.</p></div>
+          <button id="confirm-action" class="confirm" type="button" disabled>CONFIRM ACTION <span>→</span></button>
+          <p class="control-help">KEYS <kbd>1</kbd>–<kbd>4</kbd> SELECT · <kbd>ENTER</kbd> CONFIRM · <kbd>P</kbd> PAUSE</p>
+        </section>
+      </aside>
+
+      <section class="bottom-panel">
+        <div class="network-readout"><span class="overline">ROUTE INTELLIGENCE</span><div class="route-row"><span>SHORTEST</span><strong id="short-route">—</strong></div><div class="route-row"><span>ENERGY AWARE</span><strong id="aware-route">—</strong></div><p>Low energy and poor trust can change the safer route.</p></div>
+        <div class="event-feed"><div class="feed-title"><span class="overline">FIELD LOG / ROUND EVENTS</span><div class="feed-controls"><button id="restart-current" type="button">↻ RESTART</button><button id="pause-button" type="button">Ⅱ PAUSE</button></div></div><ol id="event-list"><li>Awaiting your first decision.</li></ol></div>
+      </section>
+    </main>
+    <footer>ORIGINAL PIXEL ART · SEE <a href="/dashboard">ANALYSIS DASHBOARD</a> · GRIDMIND LOCAL EDITION</footer>
+  </div>
+
+  <div id="tutorial" class="overlay" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
+    <div class="modal"><span class="overline">FIELD MANUAL / 01</span><div class="modal-glyph" aria-hidden="true">✦</div><h2 id="tutorial-title">The grid is counting on you.</h2><p>You are Spark-01. Deliver at least <b>5 packets in 8 rounds</b>, keep your battery above zero, and finish with <b>55% reputation</b> or more.</p><p><b>Transmit</b> sends your own packet through AI relays. <b>Relay</b> helps a neighbor. <b>Sleep</b> recovers energy but hurts trust. <b>Idle</b> preserves a little energy while the packet expires.</p><button id="begin-button" class="confirm" type="button">ENTER THE GRID →</button></div>
+  </div>
+  <div id="pause-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title"><div class="modal"><span class="overline">SIGNAL HELD</span><h2 id="pause-title">Game paused</h2><p>Your route will wait. Press P to resume.</p><button id="resume-button" class="confirm" type="button">RESUME →</button></div></div>
+  <div id="result-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="result-title"><div class="modal result-modal"><span class="overline">MISSION COMPLETE / FINAL REPORT</span><h2 id="result-title">Network secured</h2><p id="result-reason"></p><div id="result-stats" class="result-stats"></div><button id="restart-button" class="confirm" type="button">REPLAY SAME SEED →</button><button id="fresh-button" class="text-button" type="button">TRY A NEW SEED</button></div></div>
+</body>
+</html>

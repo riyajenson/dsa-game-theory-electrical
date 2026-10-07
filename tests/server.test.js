@@ -119,15 +119,57 @@ test("runner failures become controlled service errors", async () => {
   assert.doesNotMatch(response.text, /process failed/);
 });
 
-test("serves dashboard and rejects unknown paths", async () => {
+test("serves game, keeps dashboard accessible, and rejects unknown paths", async () => {
   const options = {
     isSimulationReady: () => true,
     runSimulation: async () => ({ schemaVersion: 1 })
   };
   const indexResponse = await request(createServer(options), "GET", "/");
   assert.equal(indexResponse.status, 200);
-  assert.match(indexResponse.text, /Grid<span>Mind/);
+  assert.match(indexResponse.text, /Signalbound/);
+
+  const dashboardResponse = await request(createServer(options), "GET", "/dashboard");
+  assert.equal(dashboardResponse.status, 200);
+  assert.match(dashboardResponse.text, /Grid<span>Mind/);
 
   const missingResponse = await request(createServer(options), "GET", "/missing");
   assert.equal(missingResponse.status, 404);
+});
+
+test("game endpoint forwards the versioned replay contract", async () => {
+  const server = createServer({ runGame: async (input) => ({ schemaVersion: 1, input }) });
+  const response = await request(server, "POST", "/api/game", {
+    schemaVersion: 1, seed: 17, actions: ["RELAY", "SLEEP"]
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.input, {
+    schemaVersion: 1, seed: 17, actions: ["RELAY", "SLEEP"]
+  });
+});
+
+test("game endpoint rejects malformed replay inputs", async () => {
+  for (const body of [
+    { schemaVersion: 2, seed: 17, actions: [] },
+    { schemaVersion: 1, seed: -1, actions: [] },
+    { schemaVersion: 1, seed: 17, actions: ["CHEAT"] },
+    { schemaVersion: 1, seed: 17, actions: Array(9).fill("IDLE") },
+    { schemaVersion: 1, seed: 17, actions: [], extra: true }
+  ]) {
+    const response = await request(createServer({
+      runGame: async () => { throw new Error("must not run"); }
+    }), "POST", "/api/game", body);
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error.code, "INVALID_INPUT");
+  }
+});
+
+test("missing game CLI is reported as a service failure", async () => {
+  const server = createServer({ runGame: async () => {
+    throw Object.assign(new Error("missing binary"), { code: "ENOENT" });
+  } });
+  const response = await request(server, "POST", "/api/game", {
+    schemaVersion: 1, seed: 17, actions: []
+  });
+  assert.equal(response.status, 503);
+  assert.equal(response.body.error.code, "GAME_UNAVAILABLE");
 });

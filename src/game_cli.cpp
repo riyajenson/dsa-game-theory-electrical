@@ -8,9 +8,10 @@
 #include <vector>
 
 int main(int argc, char* argv[]) {
-    if (argc != 5 || std::string(argv[1]) != "--seed" ||
-        std::string(argv[3]) != "--actions") {
-        std::cerr << "Usage: game_cli.exe --seed 0..999999 --actions CSV\n";
+    if (argc != 7 || std::string(argv[1]) != "--seed" ||
+        std::string(argv[3]) != "--profile" ||
+        std::string(argv[5]) != "--actions") {
+        std::cerr << "Usage: game_cli.exe --seed 0..999999 --profile cooperative|mixed|selfish --actions CSV\n";
         return 2;
     }
     try {
@@ -19,12 +20,12 @@ int main(int argc, char* argv[]) {
             throw std::invalid_argument("invalid seed");
         const int seed = std::stoi(seedText);
         std::vector<NodeAction> actions;
-        std::stringstream stream(argv[4]);
+        std::stringstream stream(argv[6]);
         std::string token;
         while (std::getline(stream, token, ',')) actions.push_back(parseGameAction(token));
-        if (!std::string(argv[4]).empty() && std::string(argv[4]).back() == ',')
+        if (!std::string(argv[6]).empty() && std::string(argv[6]).back() == ',')
             throw std::invalid_argument("invalid game action");
-        std::cout << gameToJson(runGame(seed, actions)) << "\n";
+        std::cout << gameToJson(runGame(seed, argv[4], actions)) << "\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << "\n";

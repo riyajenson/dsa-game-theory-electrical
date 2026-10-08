@@ -17,11 +17,16 @@ struct GameTurn {
     std::vector<NodeAction> aiActions;
     double energyDelta;
     double reputationDelta;
+    int scoreDelta;
+    int blockedBy;
+    bool surge;
+    bool routeChanged;
 };
 struct GamePreview {
     NodeAction action;
     bool legal;
     std::string reason;
+    std::string outcome;
     bool delivered;
     double energyDelta;
     double reputationDelta;
@@ -29,6 +34,7 @@ struct GamePreview {
 };
 struct GameState {
     int seed;
+    std::string profile;
     int round;
     std::string status;
     std::vector<SensorNode> nodes;
@@ -37,6 +43,7 @@ struct GameState {
     RouteResult energyAware;
     int attempted;
     int delivered;
+    int ownDelivered;
     int selfishDecisions;
     int score;
     std::vector<GameTurn> history;
@@ -44,6 +51,7 @@ struct GameState {
 };
 
 GameState runGame(int seed, const std::vector<NodeAction>& actions);
+GameState runGame(int seed, const std::string& profile, const std::vector<NodeAction>& actions);
 std::string gameToJson(const GameState& state);
 NodeAction parseGameAction(const std::string& text);
 

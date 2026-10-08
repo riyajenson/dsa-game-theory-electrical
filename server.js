@@ -52,12 +52,15 @@ function validateInput(input) {
 
 function validateGameInput(input) {
   if (!input || typeof input !== "object" || Array.isArray(input) ||
-      Object.keys(input).sort().join(",") !== "actions,schemaVersion,seed") {
-    return "Only schemaVersion, seed, and actions are accepted.";
+      Object.keys(input).sort().join(",") !== "actions,profile,schemaVersion,seed") {
+    return "Only schemaVersion, seed, profile, and actions are accepted.";
   }
-  if (input.schemaVersion !== 1) return "Game schemaVersion must be 1.";
+  if (input.schemaVersion !== 2) return "Game schemaVersion must be 2.";
   if (!Number.isInteger(input.seed) || input.seed < 0 || input.seed > 999999) {
     return "Seed must be an integer from 0 through 999999.";
+  }
+  if (!["cooperative", "mixed", "selfish"].includes(input.profile)) {
+    return "Profile must be cooperative, mixed, or selfish.";
   }
   if (!Array.isArray(input.actions) || input.actions.length > 8 ||
       !input.actions.every((action) =>
@@ -119,7 +122,8 @@ function runSimulationProcess(input) {
 
 function runGameProcess(input) {
   return new Promise((resolve, reject) => {
-    execFile(GAME_CLI, ["--seed", String(input.seed), "--actions", input.actions.join(",")],
+    execFile(GAME_CLI, ["--seed", String(input.seed), "--profile", input.profile,
+      "--actions", input.actions.join(",")],
       { cwd: ROOT, timeout: 10000, windowsHide: true, maxBuffer: 1024 * 1024 },
       (error, stdout) => {
         if (error) { reject(error); return; }

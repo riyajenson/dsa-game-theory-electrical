@@ -1,10 +1,25 @@
 #include "../src/GameSession.h"
 
 #include <cassert>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 
 int main() {
+    const GameState cooperative = runGame(17, "cooperative", {});
+    const GameState mixed = runGame(17, "mixed", {});
+    const GameState selfish = runGame(17, "selfish", {});
+    assert(cooperative.nodes[1].strategy == NodeStrategy::Cooperative);
+    assert(mixed.nodes[1].strategy == NodeStrategy::Selfish);
+    assert(selfish.nodes[2].strategy == NodeStrategy::Selfish);
+    assert(gameToJson(mixed).find("\"schemaVersion\":2") != std::string::npos);
+    assert(gameToJson(mixed).find("\"profile\":\"mixed\"") != std::string::npos);
+    assert(gameToJson(mixed).find("\"deliver\":6") != std::string::npos);
+    assert(gameToJson(mixed).find("\"minimumReputation\":0.60") != std::string::npos);
+    assert(mixed.nodes[0].reputation == 0.55);
+    assert(runGame(0, "selfish", {}).previews[0].delivered);
+    assert(!runGame(1, "selfish", {}).previews[0].delivered);
+    assert(gameToJson(runGame(1, "selfish", {NodeAction::Transmit})).find("\"blockedBy\":") != std::string::npos);
     const GameState start = runGame(17, {});
     assert(start.round == 0 && start.status == "playing");
     assert(start.previews.size() == 4);
@@ -16,7 +31,7 @@ int main() {
     assert(start.previews[0].delivered ==
         runGame(17, {NodeAction::Transmit}).history[0].delivered);
     assert(runGame(17, {NodeAction::Transmit}).delivered == 1);
-    assert(runGame(1, {NodeAction::Transmit}).delivered == 0);
+    assert(runGame(1, "selfish", {NodeAction::Transmit}).delivered == 0);
     assert(runGame(0, {}).nodes[2].strategy == NodeStrategy::Selfish);
     assert(runGame(17, {}).nodes[2].strategy == NodeStrategy::Cooperative);
 
@@ -31,15 +46,15 @@ int main() {
 
     const GameState sleep = runGame(17, {NodeAction::Sleep});
     assert(sleep.nodes[0].energy == 29.5);
-    assert(sleep.nodes[0].reputation == 0.55);
+    assert(std::fabs(sleep.nodes[0].reputation - 0.45) < 0.0001);
     assert(sleep.selfishDecisions == 1);
     assert(sleep.delivered == 0);
 
     const GameState win = runGame(17, {NodeAction::Transmit, NodeAction::Relay,
-        NodeAction::Idle, NodeAction::Relay, NodeAction::Idle,
+        NodeAction::Transmit, NodeAction::Relay, NodeAction::Idle,
         NodeAction::Relay, NodeAction::Idle, NodeAction::Relay});
     assert(win.status == "won");
-    assert(win.round == 8 && win.delivered == 5);
+    assert(win.round == 8 && win.delivered == 6);
     assert(win.score > 0);
     assert(win.attempted == 8 && win.selfishDecisions == 0);
 

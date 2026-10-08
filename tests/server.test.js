@@ -137,23 +137,24 @@ test("serves game, keeps dashboard accessible, and rejects unknown paths", async
 });
 
 test("game endpoint forwards the versioned replay contract", async () => {
-  const server = createServer({ runGame: async (input) => ({ schemaVersion: 1, input }) });
+  const server = createServer({ runGame: async (input) => ({ schemaVersion: 2, input }) });
   const response = await request(server, "POST", "/api/game", {
-    schemaVersion: 1, seed: 17, actions: ["RELAY", "SLEEP"]
+    schemaVersion: 2, seed: 17, profile: "mixed", actions: ["RELAY", "SLEEP"]
   });
   assert.equal(response.status, 200);
   assert.deepEqual(response.body.input, {
-    schemaVersion: 1, seed: 17, actions: ["RELAY", "SLEEP"]
+    schemaVersion: 2, seed: 17, profile: "mixed", actions: ["RELAY", "SLEEP"]
   });
 });
 
 test("game endpoint rejects malformed replay inputs", async () => {
   for (const body of [
-    { schemaVersion: 2, seed: 17, actions: [] },
-    { schemaVersion: 1, seed: -1, actions: [] },
-    { schemaVersion: 1, seed: 17, actions: ["CHEAT"] },
-    { schemaVersion: 1, seed: 17, actions: Array(9).fill("IDLE") },
-    { schemaVersion: 1, seed: 17, actions: [], extra: true }
+    { schemaVersion: 1, seed: 17, profile: "mixed", actions: [] },
+    { schemaVersion: 2, seed: -1, profile: "mixed", actions: [] },
+    { schemaVersion: 2, seed: 17, profile: "unknown", actions: [] },
+    { schemaVersion: 2, seed: 17, profile: "mixed", actions: ["CHEAT"] },
+    { schemaVersion: 2, seed: 17, profile: "mixed", actions: Array(9).fill("IDLE") },
+    { schemaVersion: 2, seed: 17, profile: "mixed", actions: [], extra: true }
   ]) {
     const response = await request(createServer({
       runGame: async () => { throw new Error("must not run"); }
@@ -168,7 +169,7 @@ test("missing game CLI is reported as a service failure", async () => {
     throw Object.assign(new Error("missing binary"), { code: "ENOENT" });
   } });
   const response = await request(server, "POST", "/api/game", {
-    schemaVersion: 1, seed: 17, actions: []
+    schemaVersion: 2, seed: 17, profile: "mixed", actions: []
   });
   assert.equal(response.status, 503);
   assert.equal(response.body.error.code, "GAME_UNAVAILABLE");

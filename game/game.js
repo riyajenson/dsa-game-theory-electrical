@@ -12,6 +12,8 @@ const actionInfo = {
 const actions = [];
 let seed = Number(new URLSearchParams(location.search).get("seed"));
 if (!Number.isInteger(seed) || seed < 0 || seed > 999999) seed = 17;
+let profile = new URLSearchParams(location.search).get("profile") || "mixed";
+if (!["cooperative", "mixed", "selfish"].includes(profile)) profile = "mixed";
 let state = null;
 let selected = null;
 let paused = false;
@@ -30,7 +32,7 @@ const signed = (value, suffix = "") => `${value > 0 ? "+" : ""}${value.toFixed(2
 async function requestGame(history) {
   const response = await fetch("/api/game", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ schemaVersion: 1, seed, actions: history })
+    body: JSON.stringify({ schemaVersion: 2, seed, profile, actions: history })
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error?.message || "The engine did not respond.");
@@ -220,7 +222,7 @@ async function restart(newSeed = false) {
   paused = false;
   byId("pause-overlay").classList.add("hidden");
   byId("result-overlay").classList.add("hidden");
-  history.replaceState(null, "", `/?seed=${seed}`);
+  history.replaceState(null, "", `/?seed=${seed}&profile=${profile}`);
   try { render(await requestGame(actions)); }
   catch (error) { setStatus(`Engine unavailable: ${error.message}`); }
 }

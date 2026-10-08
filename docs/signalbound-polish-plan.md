@@ -16,3 +16,14 @@
 5. **Verify and report.** Run native and API tests plus `npm.cmd test` and `npm.cmd run check`. Replay wins and losses at desktop and 390 px, inspect screenshots, fix visual defects, review the diff, update README/provenance/results, and make local coherent commits.
 
 No accounts, rooms, leaderboards, cloud resources, pushes, merges, or changes to the phase-4 worktree are in scope.
+
+## Delivered and verified
+
+- `e6756a0` adds contract v2, selectable AI profiles, C++ balance changes, exact outcome messages, and the deterministic seed sweep. The rationale and limits are in `signalbound-balance.md`.
+- `89a646f` adds the original pixel world, title/profile selection, tutorial, animated engine routes, turn effects, AI event log, pause/results/replay flow, optional sound controls, error retry, keyboard focus, and reduced-motion handling.
+- `npm.cmd test` passed all native suites, the 100-seed x 3-profile x 6-plan balance sweep, 10 Node tests, dashboard assertions, and client syntax checks. `npm.cmd run check` passed.
+- Chrome completed a win and a loss at 1440x1000 and 390x844. Seed 17 mixed finished the winning path with six deliveries, score 734, 7.4 energy, and 83% trust. Eight Idle turns lost. Pause, restart, keyboard confirmation, reduced motion, persisted sound controls, initial API recovery, and retry after a failed turn all passed.
+- Inspected title, game, turn-resolution, win, and loss screenshots. Fixed sprite animation positioning, low-contrast disabled actions, narrow-screen action order, Enter confirmation, and retry preserving the action history.
+- Limits: balance coverage samples seeds 0–99 and six candidate plans per profile; other policies and all million seeds are not exhaustively checked. Browser verification used Chrome on Windows. Refresh restarts the seed; no in-progress save or music track is included.
+
+The next local milestone is additional mission layouts and objectives, with broader policy-based balance testing before any multiplayer work.

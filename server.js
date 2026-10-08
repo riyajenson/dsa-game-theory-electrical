@@ -140,7 +140,8 @@ function serveStatic(requestPath, response) {
     ? (requestPath === "/dashboard" || requestPath === "/dashboard/" ? "index.html" : requestPath.slice(11))
     : (requestPath === "/" ? "index.html" : requestPath.slice(1));
   const allowed = dashboard ? ["index.html", "styles.css", "app.js"] :
-    ["index.html", "game.css", "game.js", "assets/PressStart2P-Regular.ttf",
+    ["index.html", "game.css", "polish.css", "art.js", "audio.js", "game.js",
+      "assets/PressStart2P-Regular.ttf",
       "assets/SpaceGrotesk-Regular.ttf"];
   if (!allowed.includes(relativePath)) {
     sendError(response, 404, "NOT_FOUND", "Resource not found.");

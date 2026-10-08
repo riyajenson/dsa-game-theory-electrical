@@ -127,6 +127,10 @@ test("serves game, keeps dashboard accessible, and rejects unknown paths", async
   const indexResponse = await request(createServer(options), "GET", "/");
   assert.equal(indexResponse.status, 200);
   assert.match(indexResponse.text, /Signalbound/);
+  for (const asset of ["/art.js", "/audio.js", "/polish.css"]) {
+    const response = await request(createServer(options), "GET", asset);
+    assert.equal(response.status, 200, `${asset} must be served by the game`);
+  }
 
   const dashboardResponse = await request(createServer(options), "GET", "/dashboard");
   assert.equal(dashboardResponse.status, 200);

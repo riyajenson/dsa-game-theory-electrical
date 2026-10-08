@@ -6,6 +6,9 @@
   <meta name="theme-color" content="#0c1425">
   <title>Signalbound — GridMind</title>
   <link rel="stylesheet" href="/game.css">
+  <link rel="stylesheet" href="/polish.css">
+  <script src="/art.js" defer></script>
+  <script src="/audio.js" defer></script>
   <script src="/game.js" defer></script>
 </head>
 <body>
@@ -13,25 +16,27 @@
     <header class="masthead">
       <div class="brand"><span class="brand-mark" aria-hidden="true">✦</span><div><span class="overline">GRIDMIND / FIELD OPS</span><h1>Signalbound<span class="cursor">_</span></h1></div></div>
       <nav aria-label="Primary"><a class="nav-active" href="/">PLAY</a><a href="/dashboard">ANALYSIS ↗</a></nav>
-      <div class="header-right"><span class="live-dot"></span><span>LOCAL C++ ENGINE</span></div>
+      <div class="header-right"><button id="audio-mute" class="sound-button" type="button" aria-pressed="false">♪ SOUND ON</button><label class="volume-label">VOL <input id="audio-volume" type="range" min="0" max="100" value="25" aria-label="Sound volume"></label><span class="live-dot"></span><span>LOCAL C++ ENGINE</span></div>
     </header>
+
+    <div id="connection-banner" class="connection-banner hidden" role="alert"><span id="connection-message"></span><button id="retry-button" type="button">RETRY</button></div>
 
     <main class="layout">
       <section class="mission-bar" aria-label="Mission status">
         <div><span class="overline">MISSION 01 / THE LAST RELAY</span><strong>Keep the network alive.</strong></div>
-        <div class="mission-objective">DELIVER <b id="goal-count">0 / 5</b> PACKETS <span class="divider">/</span> TRUST <b id="trust-goal">55%+</b></div>
+        <div class="mission-objective">DELIVER <b id="goal-count">0 / 6</b> PACKETS <span class="divider">/</span> TRUST <b id="trust-goal">60%+</b> <span class="divider">/</span> <b id="rounds-left">8</b> ROUNDS LEFT</div>
         <div class="seed-wrap">SEED <span id="seed-value">0017</span><button id="new-seed" type="button" title="Start a new seeded run">↻ NEW</button></div>
       </section>
 
       <section class="world-panel" aria-labelledby="world-heading">
-        <div class="panel-top"><div><span class="overline">SECTOR 07 / LIVE MAP</span><h2 id="world-heading">The relay grid</h2></div><div class="round-chip">ROUND <span id="round-value">1</span> <i>/</i> 8</div></div>
-        <div class="map-frame"><svg id="game-map" viewBox="0 0 640 416" role="img" aria-label="Sensor network map showing towers, links, routes, and packet flow"></svg><div class="map-corner map-corner-a"></div><div class="map-corner map-corner-b"></div></div>
-        <div class="map-footer"><span><i class="key key-short"></i> SHORTEST</span><span><i class="key key-aware"></i> ENERGY AWARE</span><span><i class="key key-danger"></i> INTERFERENCE</span><span class="map-hint">HOVER A TOWER FOR STATUS</span></div>
+        <div class="panel-top"><div><span class="overline">SECTOR 07 / LIVE MAP</span><h2 id="world-heading">The relay grid</h2></div><div class="map-status"><span id="surge-chip" class="surge-chip" title="Signal surges encourage reluctant relays. Check the action preview.">NORMAL SIGNAL</span><div class="round-chip">ROUND <span id="round-value">1</span> <i>/</i> 8</div></div></div>
+        <div class="map-frame"><svg id="game-map" viewBox="0 0 640 416" role="img" aria-label="Sensor network map showing towers, links, routes, and packet flow"></svg><div id="turn-resolution" class="turn-resolution hidden" role="status" aria-live="polite"><span id="resolution-icon" class="resolution-icon">✦</span><div><strong id="resolution-title">PACKET DELIVERED</strong><p id="resolution-message"></p><span id="resolution-effects"></span></div></div><div class="map-corner map-corner-a"></div><div class="map-corner map-corner-b"></div></div>
+        <div class="map-footer"><span><i class="key key-short"></i> SHORTEST</span><span><i class="key key-aware"></i> ENERGY AWARE</span><span><i class="key key-danger"></i> INTERFERENCE</span><span class="map-hint">GOLD = UNRELIABLE · ! = SUSPICIOUS</span></div>
       </section>
 
       <aside class="side-panel">
         <section class="player-card" aria-label="Player sensor status">
-          <div class="card-header"><span class="overline">YOUR SENSOR / NODE 01</span><span class="online-pill">● ONLINE</span></div>
+          <div class="card-header"><span class="overline">YOUR SENSOR / NODE 01</span><span id="player-status" class="online-pill">● ONLINE</span></div>
           <div class="player-identity"><div class="avatar" aria-hidden="true"><span class="antenna"></span><span class="head"><i></i><i></i></span><span class="body-unit"></span><span class="feet"></span></div><div><h2>SPARK-01</h2><p>Courier · Player controlled</p></div></div>
           <div class="stat"><div class="stat-label"><span>BATTERY</span><strong id="energy-value">28.0 / 100</strong></div><div class="track"><span id="energy-bar" class="fill energy"></span></div></div>
           <div class="stat"><div class="stat-label"><span>REPUTATION</span><strong id="reputation-value">65%</strong></div><div class="track"><span id="reputation-bar" class="fill reputation"></span></div></div>
@@ -41,7 +46,7 @@
         <section class="dispatch-card" aria-labelledby="dispatch-heading">
           <div class="card-header"><span class="overline">INCOMING REQUEST</span><span class="blink">● LIVE</span></div>
           <h2 id="dispatch-heading">Choose your move</h2>
-          <p id="packet-goal">A packet needs a route through the grid. Every turn costs something.</p>
+          <p id="packet-goal">Connecting to the relay grid…</p>
           <div id="action-grid" class="action-grid"></div>
           <div class="preview-box"><span class="overline">NEXT TURN / ENGINE PREVIEW</span><p id="preview-text">Select an action to inspect its outcome.</p></div>
           <button id="confirm-action" class="confirm" type="button" disabled>CONFIRM ACTION <span>→</span></button>
@@ -57,10 +62,13 @@
     <footer>ORIGINAL PIXEL ART · SEE <a href="/dashboard">ANALYSIS DASHBOARD</a> · GRIDMIND LOCAL EDITION</footer>
   </div>
 
-  <div id="tutorial" class="overlay" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
-    <div class="modal"><span class="overline">FIELD MANUAL / 01</span><div class="modal-glyph" aria-hidden="true">✦</div><h2 id="tutorial-title">The grid is counting on you.</h2><p>You are Spark-01. Deliver at least <b>5 packets in 8 rounds</b>, keep your battery above zero, and finish with <b>55% reputation</b> or more.</p><p><b>Transmit</b> sends your own packet through AI relays. <b>Relay</b> helps a neighbor. <b>Sleep</b> recovers energy but hurts trust. <b>Idle</b> preserves a little energy while the packet expires.</p><button id="begin-button" class="confirm" type="button">ENTER THE GRID →</button></div>
+  <div id="title-screen" class="overlay title-overlay" role="dialog" aria-modal="true" aria-labelledby="title-heading">
+    <div class="title-card"><div class="title-world" aria-hidden="true"><div class="title-stars">✧ · ✧ · ✧</div><div class="title-spark"><i class="spark-aerial"></i><i class="spark-face"></i><i class="spark-eyes"></i><i class="spark-torso"></i><i class="spark-boots"></i></div><div class="title-ground"></div><span class="title-packet">▣</span></div><div class="title-copy"><span class="overline">GRIDMIND PRESENTS / A LOCAL PIXEL ADVENTURE</span><h2 id="title-heading">SIGNAL<br>BOUND<span>_</span></h2><p>The relay grid is failing. One courier can keep six packets moving before the eighth round ends.</p><div class="title-set"><span class="overline">CHOOSE THE NETWORK</span><div class="profile-options"><label><input type="radio" name="profile" value="cooperative"><span><b>ALLY GRID</b><small>Cooperative · easier</small></span></label><label><input type="radio" name="profile" value="mixed" checked><span><b>FAULT LINE</b><small>Mixed · standard</small></span></label><label><input type="radio" name="profile" value="selfish"><span><b>BLACKOUT</b><small>Selfish · harder</small></span></label></div></div><button id="title-start" class="confirm" type="button">START MISSION →</button><p class="title-seed">SEED <span id="title-seed-value">0017</span> · REPLAYABLE RUN</p></div></div>
   </div>
-  <div id="pause-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title"><div class="modal"><span class="overline">SIGNAL HELD</span><h2 id="pause-title">Game paused</h2><p>Your route will wait. Press P to resume.</p><button id="resume-button" class="confirm" type="button">RESUME →</button></div></div>
-  <div id="result-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="result-title"><div class="modal result-modal"><span class="overline">MISSION COMPLETE / FINAL REPORT</span><h2 id="result-title">Network secured</h2><p id="result-reason"></p><div id="result-stats" class="result-stats"></div><button id="restart-button" class="confirm" type="button">REPLAY SAME SEED →</button><button id="fresh-button" class="text-button" type="button">TRY A NEW SEED</button></div></div>
+  <div id="tutorial" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
+    <div class="modal tutorial-modal"><span class="overline">FIELD MANUAL / FIRST ASSIGNMENT</span><div class="modal-glyph" aria-hidden="true">✦</div><h2 id="tutorial-title">You are Spark-01.</h2><p>Deliver <b>6 packets in 8 rounds</b>, keep energy above zero, and finish with <b>60% trust</b>.</p><div class="tutorial-steps"><p><b>01 · READ THE MAP</b><br>Mint marks the safer route. Gold beacons mark sensors that may refuse; signal surges encourage them to help. Red links are under interference.</p><p><b>02 · CHOOSE A MOVE</b><br>Transmit sends your packet. Relay helps a neighbor on even rounds. Sleep restores energy but costs trust; Idle lets a packet expire.</p><p><b>03 · CHECK THE PREVIEW</b><br>The C++ engine shows the exact next-turn outcome before you commit.</p></div><button id="begin-button" class="confirm" type="button">ENTER THE GRID →</button></div>
+  </div>
+  <div id="pause-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title"><div class="modal"><span class="overline">SIGNAL HELD / MISSION PAUSED</span><div class="modal-glyph">Ⅱ</div><h2 id="pause-title">Take a breath.</h2><p>The next packet and all AI decisions are waiting for you.</p><button id="resume-button" class="confirm" type="button">RESUME MISSION →</button><button id="pause-title-button" class="text-button" type="button">RETURN TO TITLE</button></div></div>
+  <div id="result-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="result-title"><div class="modal result-modal"><span id="result-badge" class="overline">MISSION COMPLETE / FINAL REPORT</span><div id="result-glyph" class="modal-glyph">✦</div><h2 id="result-title">Network secured</h2><p id="result-reason"></p><div id="result-stats" class="result-stats"></div><button id="restart-button" class="confirm" type="button">REPLAY SAME SEED →</button><button id="fresh-button" class="text-button" type="button">TRY A NEW SEED</button><button id="result-title-button" class="text-button" type="button">CHANGE NETWORK</button></div></div>
 </body>
 </html>

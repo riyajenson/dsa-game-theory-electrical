@@ -1,18 +1,46 @@
 # Signalbound / GridMind
 
-Signalbound is a local, turn-based pixel-art sensor-network game. You control Spark-01 while C++-controlled sensors decide whether to cooperate. Deliver packets across a changing graph without exhausting your battery or losing trust. The original GridMind simulation dashboard remains available for analysis.
+Signalbound is a pixel-art sensor-network game with separate Solo and live multiplayer modes. The C++ engine owns legal actions, routing, energy, reputation, delivery, and scoring. The original GridMind analysis dashboard remains available.
 
 ## Run locally
 
-Requirements: Windows, Node.js 18 or newer, and `g++` with C++11 support on `PATH`. No npm dependencies or internet connection are needed after checkout.
+Requirements: Windows, Node.js **24 or newer** (for built-in SQLite and WebSocket browser QA), and `g++` with C++11 support on `PATH`. No npm package dependencies are needed.
 
 ```powershell
 npm.cmd start
 ```
 
-Open [http://127.0.0.1:3000/](http://127.0.0.1:3000/) for the game. Open [http://127.0.0.1:3000/dashboard](http://127.0.0.1:3000/dashboard) for the existing analysis dashboard. The launcher compiles both C++ CLIs when needed, then serves both pages and APIs on loopback.
+Open [Solo](http://127.0.0.1:3000/), [Multiplayer](http://127.0.0.1:3000/multiplayer), or the [analysis dashboard](http://127.0.0.1:3000/dashboard). The launcher compiles the three C++ CLIs when needed and serves them on loopback. For another device on the same LAN, bind to the network and use the host machine's LAN address:
 
-## Play
+```powershell
+$env:HOST = '0.0.0.0'
+$env:PORT = '3000'
+npm.cmd start
+```
+
+Allow the selected port through the host firewall as appropriate. Completed matches use SQLite at `data/matches.sqlite` by default. Set `SIGNALBOUND_DB_PATH` to an absolute path on a persistent volume to change it. Migration `migrations/001_matches.sql` runs automatically; database and WAL files are git ignored. `TURN_SECONDS` changes the default timer for local testing; production lobby choices are 20–90 seconds.
+
+## Multiplayer rooms and rules
+
+1. Enter a name and create a room. Share the six-character code with one to three other people. Each guest gets one fixed node in the same map. The lobby shows assigned nodes, names, connections, ready states, and timer setting. The host starts when everyone is ready.
+2. In each of eight simultaneous rounds, privately choose Transmit, Relay, Sleep, or Idle. The first accepted choice locks. Everyone submitting resolves immediately; otherwise the timer fills missing actions with Idle. Other players see only who has submitted until resolution. The map then animates packets and shows actions, route changes, battery, trust, score effects, and plain-language failure reasons.
+3. The network wins at least **6 deliveries in 8 rounds**. Results show the network outcome, each player's contribution and rank, and an opt-in rematch. If a player has left or disconnected, the host can reopen the lobby under the same code and invite a replacement. The leaderboard retains eligible completed performances across server restarts.
+
+Transmit creates one packet from your node to terminal 05 along the C++ energy-aware route. Every intermediate sensor must choose Relay that round, or the packet stops at the first refusal. Low energy, low reputation, and one seeded interference link can alter the route. Transmit costs **4** energy and changes reputation by **+0.02** on delivery or **−0.03** on failure. Relay costs **3**, forwards all delivered packets routed through your node, and raises reputation **0.06** if helpful; an unused Relay costs energy with no trust gain. Sleep restores **1.5** energy, lowers reputation **0.10**, and counts as selfish. Idle costs **0.3**. A sensor needs enough energy to Transmit or Relay. Values stay in 0–100 energy and 0–1 reputation.
+
+Individual score is `20 × own deliveries + 12 × packets relayed + 4 × helpful relay rounds + floor(10 × reputation) + floor(energy / 5) − 5 × sleeps`. Relay can open a teammate's route and earn multiple packet rewards; Transmit can score well on a direct route but block another packet that needs your node. Sleep may preserve later options at an immediate trust and score cost. Ranking breaks ties by own deliveries, packets relayed, final reputation, and lower node number.
+
+A refresh reclaims your node with a random 256-bit guest token kept in browser local storage; the server holds only its hash in memory. Clearing that storage loses the identity. Active rooms and tokens **do not survive a server restart**; completed matches and leaderboard rows do. A disconnected or departed node defaults to Idle at deadlines. An inactive lobby expires after 30 minutes; a match with all players gone is abandoned after two empty rounds. A completed match is leaderboard eligible only when each participant had at least one accepted action and fewer than two consecutive rounds had no accepted action. Ineligible results are stored for audit. Each match ID inserts once; repeated finish requests cannot add scores. The leaderboard lists the top 50 individual match performances. Ties use own deliveries, packets relayed, final reputation, earliest completion, then lower node number. Guest names are not accounts; there is no recovery or anti-collusion control.
+
+## Multiplayer API and replay
+
+`POST /api/rooms` with `{"name":"Ada"}` creates a room; `POST /api/rooms/CODE/join` joins. Each returns `{roomId,token,nodeId}`. `GET /api/leaderboard` lists eligible scores. `GET /api/matches/MATCH_ID` returns seed, ordered action record, engine schema, and final JSON. `GET /api/health` reports CLI and storage readiness.
+
+Connect to same-origin `/ws`. Client messages use `v:1`, `type`, and `roomId`. Begin with `{"v":1,"type":"hello","roomId":"ABC234","token":"...","afterSeq":0}`. The server sends a current `snapshot` with your node and private accepted action. Ordered events include `roomId`, `matchId`, `seq`, `round`, `type`, and `data`; reconnect or sequence gaps recover by snapshot. Public `submitted` events reveal only a boolean. `accepted` is private. `round_resolved` contains authoritative C++ output. Intents are `ready`, `settings`, `start`, `action`, `leave`, `rematch`, and `reopen`; an action includes current match ID, round, and action name, never a node ID or computed totals. Server checks message shape, membership, host privilege, action legality, size, rate, and duplicates.
+
+Saved records contain a deterministic seed and ordered action letters (`T/R/S/I` for each assigned node, comma-separated rounds). Replay after building with `multiplayer_cli.exe --seed 17 --players 2 --rounds TR,II`. The same binary and record yield identical engine output. SQLite tables are `matches`, `match_players`, and `schema_migrations`.
+
+## Solo play
 
 - Deliver at least **6 packets in 8 rounds**, finish with **60% or more reputation**, and keep energy above zero. Spark-01 starts with 28 energy and 55% trust.
 - Choose **Ally Grid** (cooperative AI), **Fault Line** (mixed AI), or **Blackout** (selfish AI) on the title screen. The same seed and profile replay the same run.
@@ -37,9 +65,9 @@ npm.cmd test
 npm.cmd run check
 ```
 
-The test command compiles and runs native planner, routing, metrics, batch runner, game session, and 100-seed balance tests; runs Node API/launcher tests and dashboard assertions; and checks game client syntax. Browser checks cover desktop and 390-pixel widths, start-to-win, start-to-loss, pause, restart, API recovery, and sound preference persistence.
+The test command compiles and runs native planner, routing, metrics, batch runner, Solo, 100-seed balance, and multiplayer tests. Node tests cover HTTP and WebSocket rooms, private simultaneous actions, timeout, duplicate submission, reconnect, SQLite persistence across restart, deterministic replay, and leaderboard idempotence. Dashboard assertions and client syntax checks also run. Node 24 currently prints an experimental warning for its built-in SQLite module.
 
-The browser QA script needs Node.js 22 or newer for its built-in WebSocket client. Start the app, then start a separate hidden Chrome with remote debugging on port 9223 and run the script:
+For Solo browser QA, start the app, then start a separate hidden Chrome with remote debugging on port 9223 and run:
 
 ```powershell
 $chrome = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
@@ -48,7 +76,20 @@ Start-Process -FilePath $chrome -ArgumentList @('--headless=new','--remote-debug
 node scripts/browser-qa.js
 ```
 
-The script saves title, game, and result screenshots under the system temporary directory. Milestone verification: `npm.cmd test` passed all native suites and 10 Node tests; `npm.cmd run check` passed; Chrome browser QA passed at 1440 and 390 pixels. Seed 17 mixed won with 6/8 packets and score 734 after two Transmits, four Relays, and two Idles; eight Idles lost. The 100-seed, three-profile sweep found a winning plan in every sampled start, with 600/500/100 winning candidate plans out of 600 for cooperative/mixed/selfish. This sampled sweep does not guarantee every seed or player policy.
+The script saves title, game, and result screenshots under the system temporary directory. In the earlier Solo milestone, Chrome browser QA passed at 1440 and 390 pixels. Seed 17 mixed won with 6/8 packets and score 734 after two Transmits, four Relays, and two Idles; eight Idles lost. The 100-seed, three-profile sweep found a winning plan in every sampled start, with 600/500/100 winning candidate plans out of 600 for cooperative/mixed/selfish. This sampled sweep does not guarantee every seed or player policy.
+
+For multiplayer QA, start the server on port 3000 with `$env:TURN_SECONDS='3'` for a short test deadline. Launch two independent Chrome profiles, then run the script in another terminal:
+
+```powershell
+$chrome = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+$profileA = '--user-data-dir=' + (Join-Path $env:TEMP 'signalbound-multi-a')
+$profileB = '--user-data-dir=' + (Join-Path $env:TEMP 'signalbound-multi-b')
+Start-Process -FilePath $chrome -ArgumentList @('--headless=new','--remote-debugging-port=9223','--remote-allow-origins=*',$profileA,'about:blank') -WindowStyle Hidden
+Start-Process -FilePath $chrome -ArgumentList @('--headless=new','--remote-debugging-port=9224','--remote-allow-origins=*',$profileB,'about:blank') -WindowStyle Hidden
+node scripts/multiplayer-browser-qa.js
+```
+
+The script creates and joins a room, refreshes the second browser mid-match and on results, waits for a timeout, finishes eight rounds, checks rematch, checks desktop and 390-pixel widths for overflow, and writes screenshots to `%TEMP%\signalbound-multiplayer-qa`.
 
 Both viewport sizes completed a full win, loss, and restart. Additional browser checks passed for reduced motion, keyboard confirmation, mute/volume persistence, API failure recovery, and retrying a failed turn without dropping earlier turns. Final title, map, resolution, and results screenshots were inspected. Verification used Windows and Chrome; other browsers are not yet certified. Refresh starts the same seed again; in-progress saves are not included. Audio is short synthesized effects only, with no music track.
 
@@ -59,16 +100,18 @@ Both viewport sizes completed a full win, loss, and restart. Additional browser 
 - `src/EnergyPlanner.*`: memoized finite-horizon DP and greedy comparison.
 - `src/SimulationMetrics.*`: packet, energy, lifetime, and strategy aggregation.
 - `src/SimulationRunner.*`: deterministic scenario and JSON contract.
-- `src/GameSession.*`: seeded turn replay, legality, AI turns, delivery, scoring, result, and preview.
+- `src/GameSession.*`: seeded Solo turn replay, legality, AI turns, delivery, scoring, result, and preview.
+- `src/MultiplayerSession.*`: seeded simultaneous multiplayer replay, energy-aware routes, legal actions, packet outcomes, and per-node scoring.
 - `src/game_cli.cpp`: game JSON CLI. The existing simulation CLI still powers the dashboard.
-- `server.js`: dependency-free loopback APIs and static server.
-- `game/`: original code-native pixel sprites, terrain, packet/status effects, title, tutorial, turn feedback, optional Web Audio cues, and results.
+- `server.js`, `room-server.js`: HTTP APIs, versioned WebSocket rooms, membership, deadlines, and snapshots.
+- `match-store.js`, `migrations/`: SQLite completed match records and leaderboard.
+- `game/`: original code-native pixel sprites, terrain, packet/status effects, Solo and multiplayer UI, optional Solo Web Audio cues, and results.
 - `dashboard/`: existing simulation and reporting view.
 
 ## Assets and licenses
 
 Spark-01, four distinct AI/terminal sprites, terrain, relay ruins, interference, route, packet, and delivery effects are original code-native SVG/CSS in `game/art.js` and `game/polish.css`. The title Spark sprite is original CSS art. Sound cues are synthesized at runtime with Web Audio in `game/audio.js`; no external audio files or generated bitmap assets are used. The bundled **Press Start 2P** font comes from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/pressstart2p) and **Space Grotesk** from [Florian Karsten's repository](https://github.com/floriankarsten/space-grotesk). Both use SIL Open Font License 1.1; license texts are in `game/assets/`. Fonts are served locally for offline play.
 
-## Future milestones
+## Hosting later
 
-This release has no accounts, save database, rooms, leaderboard, or cloud dependency. A later milestone can add private rooms with server-authoritative matches. Player identity, persistent match history, and leaderboards should follow after match rules and replay validation are stable. Oracle Cloud deployment is a separate future hosting task.
+No cloud resources were provisioned or deployed. An eventual Oracle Cloud host needs Node 24 and matching C++ binaries or build tools, a persistent writable volume for `SIGNALBOUND_DB_PATH` with backups, `HOST`, `PORT`, and `ALLOWED_ORIGINS` through environment configuration, a process supervisor, and a TLS reverse proxy that forwards WebSocket Upgrade and preserves Host and Origin. Use `/api/health` for readiness. Run one server process with the present in-memory room model; multiple replicas would require shared room state and coordinated deadlines. Keep tokens, database files, and configuration out of source control.

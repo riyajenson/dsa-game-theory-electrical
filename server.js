@@ -1,10 +1,11 @@
 "use strict";
 
-const { execFile } = require("node:child_process");
+const { execFile, execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { RoomServer } = require("./room-server");
+const { loadConfig, trustedRequest } = require("./deployment-config");
 
 const ROOT = __dirname;
 const DASHBOARD_ROOT = path.join(ROOT, "dashboard");
@@ -169,21 +170,41 @@ function serveStatic(requestPath, response) {
 }
 
 function createServer(options = {}) {
+  const config = options.config || loadConfig();
+  const usable = (file, args) => {
+    try { JSON.parse(execFileSync(file, args, { cwd: ROOT, timeout: 3000,
+      windowsHide: true, maxBuffer: 1024 * 1024 }).toString()); return true; }
+    catch { return false; }
+  };
   const runSimulation = options.runSimulation || runSimulationProcess;
   const runGame = options.runGame || runGameProcess;
   const isSimulationReady = options.isSimulationReady ||
-    (() => fs.existsSync(SIMULATION_CLI));
-  const isGameReady = options.isGameReady || (() => fs.existsSync(GAME_CLI));
+    (() => usable(SIMULATION_CLI, ["--rounds", "1", "--strategy", "mixed"]));
+  const isGameReady = options.isGameReady || (() => usable(GAME_CLI,
+    ["--seed", "17", "--profile", "mixed", "--actions", ""]));
   const isMultiplayerReady = options.isMultiplayerReady ||
-    (() => fs.existsSync(MULTIPLAYER_CLI));
-  const rooms = new RoomServer(options);
+    (() => usable(MULTIPLAYER_CLI,
+      ["--seed", "17", "--players", "2", "--rounds", ""]));
+  const rooms = new RoomServer({ ...options, dbPath: options.dbPath || config.dbPath,
+    allowedOrigins: options.allowedOrigins || config.allowedOrigins.join(","),
+    requireOrigin: config.mode === "production",
+    turnSeconds: options.turnSeconds || config.turnSeconds });
   const isStorageReady = options.isStorageReady || (() => {
-    rooms.database().db.prepare("SELECT 1").get();
-    return true;
+    return rooms.database().ready();
   });
 
   const server = http.createServer(async (request, response) => {
     const requestUrl = new URL(request.url, "http://127.0.0.1");
+    if (request.method === "GET" && requestUrl.pathname === "/api/live") {
+      sendJson(response, 200, { status: "ok" }); return;
+    }
+    if (!trustedRequest(request, config)) {
+      sendError(response, 403, "UNTRUSTED_PROXY", "Secure proxy required."); return;
+    }
+    if (config.mode === "production" && request.method === "POST" &&
+        request.headers.origin !== config.publicOrigin) {
+      sendError(response, 403, "INVALID_ORIGIN", "Public origin required."); return;
+    }
     if (request.method === "POST" &&
         (requestUrl.pathname === "/api/rooms" ||
          /^\/api\/rooms\/[A-Z2-9]{6}\/join$/.test(requestUrl.pathname))) {
@@ -311,15 +332,22 @@ function createServer(options = {}) {
 
     sendError(response, 404, "NOT_FOUND", "Resource not found.");
   });
-  server.on("upgrade", (request, socket, head) => rooms.upgrade(request, socket, head));
+  server.on("upgrade", (request, socket, head) => {
+    if (!trustedRequest(request, config)) {
+      socket.end("HTTP/1.1 403 Forbidden\r\n\r\n"); return;
+    }
+    rooms.upgrade(request, socket, head);
+  });
   server.on("close", () => rooms.close());
   server.rooms = rooms;
   return server;
 }
 
 if (require.main === module) {
-  createServer().listen(Number(process.env.PORT || 3000), process.env.HOST || "127.0.0.1", () => {
-    console.log("Signalbound running");
+  const config = loadConfig();
+  createServer({ config }).listen(config.port, config.host, () => {
+    console.log(JSON.stringify({ level: "info", event: "listening", mode: config.mode,
+      host: config.host, port: config.port }));
   });
 }
 

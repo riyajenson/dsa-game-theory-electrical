@@ -12,6 +12,13 @@ class MatchStore {
     this.db.prepare("INSERT OR IGNORE INTO schema_migrations(version) VALUES (1)").run();
   }
 
+  ready() {
+    if (this.db.prepare("PRAGMA quick_check").get().quick_check !== "ok") return false;
+    this.db.exec("BEGIN IMMEDIATE");
+    this.db.exec("ROLLBACK");
+    return true;
+  }
+
   save(room, state, eligible, outcome = state.status) {
     const sorted = room.players.map((player, index) => ({ player,
       result: state.players[index] })).sort((a, b) =>

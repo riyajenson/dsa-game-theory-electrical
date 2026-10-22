@@ -93,6 +93,7 @@ class RoomServer {
     this.defaultTurnSeconds = options.turnSeconds || Number(process.env.TURN_SECONDS || 30);
     this.allowedOrigins = (options.allowedOrigins || process.env.ALLOWED_ORIGINS || "").split(",")
       .map((value) => value.trim()).filter(Boolean);
+    this.requireOrigin = Boolean(options.requireOrigin);
     this.sweeper = setInterval(() => this.sweep(), 60000);
     this.sweeper.unref?.();
   }
@@ -376,11 +377,11 @@ class RoomServer {
   upgrade(request, socket, head) {
     const url = new URL(request.url, "http://localhost");
     const origin = request.headers.origin;
-    const originAllowed = !origin || (this.allowedOrigins.length ?
+    const originAllowed = (!this.requireOrigin && !origin) || (origin && (this.allowedOrigins.length ?
       this.allowedOrigins.includes(origin) : (() => {
         try { return new URL(origin).host === request.headers.host; }
         catch { return false; }
-      })());
+      })()));
     if (url.pathname !== "/ws" || !originAllowed ||
         request.headers.upgrade?.toLowerCase() !== "websocket" ||
         !/^[A-Za-z0-9+/]{22}==$/.test(request.headers["sec-websocket-key"] || "")) {

@@ -80,10 +80,10 @@ function main() {
     return;
   }
   const { createServer } = require("../server");
-  const host = process.env.HOST || "127.0.0.1";
-  const port = Number(process.env.PORT || 3000);
-  createServer().listen(port, host, () => {
-    console.log(`Signalbound running at http://${host}:${port}`);
+  const config = require("../deployment-config").loadConfig();
+  createServer({ config }).listen(config.port, config.host, () => {
+    console.log(JSON.stringify({ level: "info", event: "listening", mode: config.mode,
+      host: config.host, port: config.port }));
   });
 }
 

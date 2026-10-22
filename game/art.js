@@ -156,5 +156,47 @@ window.SignalArt = (() => {
     for (const node of state.nodes) sprite(map, node);
     packet(map, state);
   }
-  return { draw };
+  function drawMultiplayer(state, roster, lastRound) {
+    const map = document.getElementById("game-map");
+    map.replaceChildren();
+    terrain(map, state.seed);
+    for (const link of state.links) cable(map, link);
+    for (const route of state.routes) if (route.length > 1)
+      map.append(el("path", { d: linePath(route), class: "route-safe" }));
+    for (const player of state.players) {
+      sprite(map, { id: player.nodeId, energy: player.energy,
+        reputation: player.reputation, strategy: "cooperative", suspicious: false });
+      const [x, y] = pos[player.nodeId];
+      const label = el("text", { x, y: y + 66, "text-anchor": "middle",
+        class: "sensor-label" });
+      label.textContent = roster[player.nodeId - 1]?.name || `NODE ${player.nodeId}`;
+      map.append(label);
+    }
+    sprite(map, { id: 5, energy: 100, reputation: 1,
+      strategy: "cooperative", suspicious: false });
+    if (!lastRound) return;
+    lastRound.actions.forEach((action, index) => {
+      const [x, y] = pos[index + 1];
+      const label = el("text", { x: x + 26, y: y - 38,
+        class: "sleep-effect" });
+      label.textContent = { TRANSMIT: "T", RELAY: "R", SLEEP: "Z", IDLE: "·" }[action];
+      map.append(label);
+    });
+    lastRound.packets.forEach((packet, index) => {
+      if (packet.route.length < 2) return;
+      const stop = packet.blockedBy ? packet.route.indexOf(packet.blockedBy) : -1;
+      const route = stop >= 0 ? packet.route.slice(0, stop + 1) : packet.route;
+      const piece = el("g", { class: packet.delivered ? "packet-flight" :
+        "packet-flight packet-failed" });
+      block(piece, -7, -7, 14, 14, "packet-shell");
+      block(piece, -3, -3, 6, 6, "packet-core");
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        const [endX, endY] = pos[route.at(-1)];
+        piece.setAttribute("transform", `translate(${endX} ${endY})`);
+      } else piece.append(el("animateMotion", { path: linePath(route),
+        begin: `${index * .18}s`, dur: "1.3s", fill: "freeze", repeatCount: "1" }));
+      map.append(piece);
+    });
+  }
+  return { draw, drawMultiplayer };
 })();

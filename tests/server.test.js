@@ -52,11 +52,26 @@ function request(server, method, path, body, headers = {}) {
 test("health reports injected runner readiness", async () => {
   const server = createServer({
     isSimulationReady: () => true,
+    isGameReady: () => true,
+    isMultiplayerReady: () => true,
+    isStorageReady: () => true,
     runSimulation: async () => ({ schemaVersion: 1 })
   });
   const response = await request(server, "GET", "/api/health");
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { status: "ok", simulationReady: true });
+  assert.equal(response.body.status, "ok");
+  assert.equal(response.body.simulationReady, true);
+  assert.equal(typeof response.body.multiplayerReady, "boolean");
+  assert.equal(typeof response.body.storageReady, "boolean");
+});
+
+test("health becomes unavailable when the multiplayer engine is missing", async () => {
+  const response = await request(createServer({ isSimulationReady: () => true,
+    isGameReady: () => true, isMultiplayerReady: () => false,
+    isStorageReady: () => true }), "GET", "/api/health");
+  assert.equal(response.status, 503);
+  assert.equal(response.body.status, "degraded");
+  assert.equal(response.body.multiplayerReady, false);
 });
 
 test("simulation endpoint validates and forwards complete input", async () => {
@@ -135,6 +150,10 @@ test("serves game, keeps dashboard accessible, and rejects unknown paths", async
   const dashboardResponse = await request(createServer(options), "GET", "/dashboard");
   assert.equal(dashboardResponse.status, 200);
   assert.match(dashboardResponse.text, /Grid<span>Mind/);
+
+  const multiplayer = await request(createServer(options), "GET", "/multiplayer");
+  assert.equal(multiplayer.status, 200);
+  assert.match(multiplayer.text, /Create a room/);
 
   const missingResponse = await request(createServer(options), "GET", "/missing");
   assert.equal(missingResponse.status, 404);

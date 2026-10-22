@@ -4,3 +4,7 @@
 *.out
 .vscode/
 .worktrees/
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

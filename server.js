@@ -4,12 +4,14 @@ const { execFile } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
+const { RoomServer } = require("./room-server");
 
 const ROOT = __dirname;
 const DASHBOARD_ROOT = path.join(ROOT, "dashboard");
 const GAME_ROOT = path.join(ROOT, "game");
 const SIMULATION_CLI = path.join(ROOT, "simulation_cli.exe");
 const GAME_CLI = path.join(ROOT, "game_cli.exe");
+const MULTIPLAYER_CLI = path.join(ROOT, "multiplayer_cli.exe");
 const MAX_BODY_BYTES = 16 * 1024;
 
 const CONTENT_TYPES = {
@@ -138,9 +140,12 @@ function serveStatic(requestPath, response) {
   const root = dashboard ? DASHBOARD_ROOT : GAME_ROOT;
   const relativePath = dashboard
     ? (requestPath === "/dashboard" || requestPath === "/dashboard/" ? "index.html" : requestPath.slice(11))
-    : (requestPath === "/" ? "index.html" : requestPath.slice(1));
+    : (requestPath === "/" ? "index.html" :
+      requestPath === "/multiplayer" || requestPath === "/multiplayer/" ?
+        "multiplayer.html" : requestPath.slice(1));
   const allowed = dashboard ? ["index.html", "styles.css", "app.js"] :
-    ["index.html", "game.css", "polish.css", "art.js", "audio.js", "game.js",
+    ["index.html", "multiplayer.html", "multiplayer.css", "multiplayer.js",
+      "game.css", "polish.css", "art.js", "audio.js", "game.js",
       "assets/PressStart2P-Regular.ttf",
       "assets/SpaceGrotesk-Regular.ttf"];
   if (!allowed.includes(relativePath)) {
@@ -168,9 +173,57 @@ function createServer(options = {}) {
   const runGame = options.runGame || runGameProcess;
   const isSimulationReady = options.isSimulationReady ||
     (() => fs.existsSync(SIMULATION_CLI));
+  const isGameReady = options.isGameReady || (() => fs.existsSync(GAME_CLI));
+  const isMultiplayerReady = options.isMultiplayerReady ||
+    (() => fs.existsSync(MULTIPLAYER_CLI));
+  const rooms = new RoomServer(options);
+  const isStorageReady = options.isStorageReady || (() => {
+    rooms.database().db.prepare("SELECT 1").get();
+    return true;
+  });
 
-  return http.createServer(async (request, response) => {
+  const server = http.createServer(async (request, response) => {
     const requestUrl = new URL(request.url, "http://127.0.0.1");
+    if (request.method === "POST" &&
+        (requestUrl.pathname === "/api/rooms" ||
+         /^\/api\/rooms\/[A-Z2-9]{6}\/join$/.test(requestUrl.pathname))) {
+      if (!rooms.allowHttp(request.socket.remoteAddress || "unknown")) {
+        sendError(response, 429, "RATE_LIMITED", "Too many room requests. Retry soon."); return;
+      }
+      if (!String(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
+        sendError(response, 415, "UNSUPPORTED_MEDIA_TYPE", "Use application/json."); return;
+      }
+      let body;
+      try { body = await readJsonBody(request); }
+      catch { sendError(response, 400, "INVALID_JSON", "Invalid JSON body."); return; }
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).join(",") !== "name") {
+        sendError(response, 400, "INVALID_INPUT", "Send a name only."); return;
+      }
+      try {
+        const code = requestUrl.pathname.split("/")[3];
+        const result = code ? rooms.join(code, body.name) : rooms.create(body.name);
+        sendJson(response, code ? 200 : 201, result);
+      } catch (error) {
+        const status = error.message === "ROOM_NOT_FOUND" ? 404 :
+          error.message === "ROOM_CLOSED" ? 409 : 400;
+        sendError(response, status, error.message, error.message.replaceAll("_", " "));
+      }
+      return;
+    }
+    if (request.method === "GET" && requestUrl.pathname === "/api/leaderboard") {
+      try { sendJson(response, 200, { schemaVersion: 1, entries: rooms.database().leaderboard() }); }
+      catch { sendError(response, 503, "STORAGE_UNAVAILABLE", "Leaderboard unavailable."); }
+      return;
+    }
+    if (request.method === "GET" && /^\/api\/matches\/[a-f0-9-]{36}$/.test(requestUrl.pathname)) {
+      try {
+        const match = rooms.database().match(requestUrl.pathname.split("/")[3]);
+        if (match) sendJson(response, 200, match);
+        else sendError(response, 404, "NOT_FOUND", "Match not found.");
+      } catch { sendError(response, 503, "STORAGE_UNAVAILABLE", "Match record unavailable."); }
+      return;
+    }
     if (request.method === "POST" && requestUrl.pathname === "/api/game") {
       if (!String(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
         sendError(response, 415, "UNSUPPORTED_MEDIA_TYPE", "Use application/json.");
@@ -193,9 +246,16 @@ function createServer(options = {}) {
       return;
     }
     if (request.method === "GET" && requestUrl.pathname === "/api/health") {
-      sendJson(response, 200, {
-        status: "ok",
-        simulationReady: Boolean(isSimulationReady())
+      let storageReady = false;
+      try { storageReady = Boolean(isStorageReady()); }
+      catch { storageReady = false; }
+      const simulationReady = Boolean(isSimulationReady());
+      const gameReady = Boolean(isGameReady());
+      const multiplayerReady = Boolean(isMultiplayerReady());
+      const healthy = simulationReady && gameReady && multiplayerReady && storageReady;
+      sendJson(response, healthy ? 200 : 503, {
+        status: healthy ? "ok" : "degraded",
+        simulationReady, gameReady, multiplayerReady, storageReady
       });
       return;
     }
@@ -251,11 +311,15 @@ function createServer(options = {}) {
 
     sendError(response, 404, "NOT_FOUND", "Resource not found.");
   });
+  server.on("upgrade", (request, socket, head) => rooms.upgrade(request, socket, head));
+  server.on("close", () => rooms.close());
+  server.rooms = rooms;
+  return server;
 }
 
 if (require.main === module) {
-  createServer().listen(3000, "127.0.0.1", () => {
-    console.log("Dashboard running at http://127.0.0.1:3000");
+  createServer().listen(Number(process.env.PORT || 3000), process.env.HOST || "127.0.0.1", () => {
+    console.log("Signalbound running");
   });
 }
 

@@ -89,6 +89,7 @@ class RoomServer {
     this.dbPath = options.dbPath || process.env.SIGNALBOUND_DB_PATH ||
       path.join(ROOT, "data", "matches.sqlite");
     this.store = null;
+    this.recovered = false;
     this.httpRate = new Map();
     this.defaultTurnSeconds = options.turnSeconds || Number(process.env.TURN_SECONDS || 30);
     this.allowedOrigins = (options.allowedOrigins || process.env.ALLOWED_ORIGINS || "").split(",")
@@ -97,7 +98,26 @@ class RoomServer {
     this.sweeper = setInterval(() => this.sweep(), 60000);
     this.sweeper.unref?.();
   }
-  database() { return this.store ||= new MatchStore(this.dbPath); }
+  database() {
+    if (!this.store) this.store = new MatchStore(this.dbPath);
+    if (!this.recovered) {
+      for (const record of this.store.interruptedRooms()) {
+        const players = JSON.parse(record.players_json).map((p) => ({ ...p,
+          ready: false, left: false, sockets: new Set(), acceptedCount: 0 }));
+        this.rooms.set(record.room_id, { id: record.room_id, players,
+          hostHash: players[0]?.tokenHash || null, status: "interrupted", seq: 0,
+          matchId: record.match_id, seed: record.seed,
+          history: record.history ? record.history.split(",") : [],
+          actions: new Map(), deadline: null, timer: null,
+          turnSeconds: record.turn_seconds, state: JSON.parse(record.state_json),
+          lastActivity: Date.now(), idleRounds: 0, resolving: false,
+          eligible: false, persisted: false,
+          reason: "Server restarted during this match. No result was ranked." });
+      }
+      this.recovered = true;
+    }
+    return this.store;
+  }
   allowHttp(address) {
     const now = Date.now();
     const times = (this.httpRate.get(address) || []).filter((time) => now - time < 60000);
@@ -113,6 +133,7 @@ class RoomServer {
       ready: false, left: false, sockets: new Set(), acceptedCount: 0 } };
   }
   create(name) {
+    this.database();
     const { token, member } = this.player(name, 1);
     let id;
     do { id = randomCode(); } while (this.rooms.has(id));
@@ -124,6 +145,7 @@ class RoomServer {
     return { roomId: id, token, nodeId: 1 };
   }
   join(id, name) {
+    this.database();
     const room = this.rooms.get(id);
     if (!room) throw new Error("ROOM_NOT_FOUND");
     if (room.status !== "lobby" || room.players.length >= 4) throw new Error("ROOM_CLOSED");
@@ -142,7 +164,8 @@ class RoomServer {
       settings: { turnSeconds: room.turnSeconds, maxRounds: 8, target: 6 },
       seed: room.seed, deadline: room.deadline, state: room.state,
       history: room.history.join(","), ranking: room.ranking || null,
-      eligible: room.eligible || false, persisted: room.persisted ?? null };
+      eligible: room.eligible || false, persisted: room.persisted ?? null,
+      reason: room.reason || null };
   }
   envelope(room, type, data, seq = room.seq) {
     return { v: 1, type, roomId: room.id, matchId: room.matchId,
@@ -172,6 +195,7 @@ class RoomServer {
     room.persisted = null;
     room.players.forEach((player) => { player.ready = false; player.acceptedCount = 0; });
     room.state = await this.runEngine(room.seed, room.players.length, room.history);
+    this.database().saveActive(room);
     room.status = "playing";
     this.emit(room, "match_started", { state: room.state });
     this.beginRound(room);
@@ -195,6 +219,8 @@ class RoomServer {
     try {
       const next = await this.runEngine(room.seed, room.players.length,
         [...room.history, row]);
+      if (this.closed) return;
+      this.database().saveActive(room, next, [...room.history, row]);
       room.history.push(row);
       room.state = next;
       room.deadline = null;
@@ -236,6 +262,7 @@ class RoomServer {
       b.reputation - a.reputation || a.nodeId - b.nodeId);
   }
   openLobby(room, players) {
+    if (room.status === "interrupted") this.database().clearActive(room.matchId);
     room.players = players;
     room.players.forEach((p, i) => { p.nodeId = i + 1; p.ready = false; });
     if (!room.players.some((p) => p.tokenHash === room.hostHash))
@@ -244,6 +271,7 @@ class RoomServer {
     room.matchId = null; room.seed = null; room.state = null;
     room.history = []; room.deadline = null;
     room.ranking = null; room.eligible = false;
+    room.reason = null;
     room.lastActivity = Date.now();
     this.emit(room, "lobby_open", { players: this.publicState(room).players,
       hostNodeId: room.players.find((p) => p.tokenHash === room.hostHash)?.nodeId || null });
@@ -368,13 +396,15 @@ class RoomServer {
     } else if (message.type === "reopen") {
       const hostPlayer = room.players.find((p) => p.tokenHash === room.hostHash);
       if (!exact(message, ["v", "type", "roomId"]) ||
-          !["finished", "abandoned"].includes(room.status) ||
+          !["finished", "abandoned", "interrupted"].includes(room.status) ||
           (!host && hostPlayer?.sockets.size))
         return this.error(socket, room, "CANNOT_REOPEN");
       this.openLobby(room, room.players.filter((p) => !p.left && p.sockets.size > 0));
     } else this.error(socket, room, "INVALID_MESSAGE");
   }
   upgrade(request, socket, head) {
+    try { this.database(); }
+    catch { socket.end("HTTP/1.1 503 Service Unavailable\r\n\r\n"); return; }
     const url = new URL(request.url, "http://localhost");
     const origin = request.headers.origin;
     const originAllowed = (!this.requireOrigin && !origin) || (origin && (this.allowedOrigins.length ?
@@ -403,7 +433,7 @@ class RoomServer {
   sweep() {
     const now = Date.now();
     for (const room of this.rooms.values()) {
-      if (["lobby", "finished", "abandoned"].includes(room.status) &&
+      if (["lobby", "finished", "abandoned", "interrupted"].includes(room.status) &&
           now - room.lastActivity > 30 * 60 * 1000) {
         this.rooms.delete(room.id);
         clearTimeout(room.timer);
@@ -414,6 +444,8 @@ class RoomServer {
       if (times.every((time) => now - time >= 60000)) this.httpRate.delete(address);
   }
   close() {
+    if (this.closed) return;
+    this.closed = true;
     clearInterval(this.sweeper);
     for (const room of this.rooms.values()) {
       clearTimeout(room.timer);

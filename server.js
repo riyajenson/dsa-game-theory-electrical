@@ -226,9 +226,14 @@ function createServer(options = {}) {
         const result = code ? rooms.join(code, body.name) : rooms.create(body.name);
         sendJson(response, code ? 200 : 201, result);
       } catch (error) {
-        const status = error.message === "ROOM_NOT_FOUND" ? 404 :
-          error.message === "ROOM_CLOSED" ? 409 : 400;
-        sendError(response, status, error.message, error.message.replaceAll("_", " "));
+        const known = ["ROOM_NOT_FOUND", "ROOM_CLOSED", "INVALID_NAME"];
+        if (!known.includes(error.message)) {
+          sendError(response, 503, "STORAGE_UNAVAILABLE", "Room storage unavailable.");
+        } else {
+          const status = error.message === "ROOM_NOT_FOUND" ? 404 :
+            error.message === "ROOM_CLOSED" ? 409 : 400;
+          sendError(response, status, error.message, error.message.replaceAll("_", " "));
+        }
       }
       return;
     }

@@ -10,6 +10,8 @@ class MatchStore {
     this.db.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;");
     this.db.exec(fs.readFileSync(path.join(__dirname, "migrations/001_matches.sql"), "utf8"));
     this.db.prepare("INSERT OR IGNORE INTO schema_migrations(version) VALUES (1)").run();
+    this.db.exec(fs.readFileSync(path.join(__dirname, "migrations/002_active_rooms.sql"), "utf8"));
+    this.db.prepare("INSERT OR IGNORE INTO schema_migrations(version) VALUES (2)").run();
   }
 
   ready() {
@@ -17,6 +19,28 @@ class MatchStore {
     this.db.exec("BEGIN IMMEDIATE");
     this.db.exec("ROLLBACK");
     return true;
+  }
+
+  saveActive(room, state = room.state, history = room.history) {
+    this.db.prepare(`INSERT INTO active_rooms
+      (room_id,match_id,seed,players_json,state_json,history,turn_seconds,status,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(room_id) DO UPDATE SET
+      match_id=excluded.match_id, seed=excluded.seed, players_json=excluded.players_json,
+      state_json=excluded.state_json, history=excluded.history,
+      turn_seconds=excluded.turn_seconds, status='playing', updated_at=excluded.updated_at`)
+      .run(room.id, room.matchId, room.seed, JSON.stringify(room.players.map((p) => ({
+        name: p.name, nodeId: p.nodeId, tokenHash: p.tokenHash }))),
+      JSON.stringify(state), history.join(","), room.turnSeconds, "playing",
+      new Date().toISOString());
+  }
+
+  interruptedRooms() {
+    this.db.prepare("UPDATE active_rooms SET status='interrupted' WHERE status='playing'").run();
+    return this.db.prepare("SELECT * FROM active_rooms WHERE status='interrupted'").all();
+  }
+
+  clearActive(matchId) {
+    this.db.prepare("DELETE FROM active_rooms WHERE match_id=?").run(matchId);
   }
 
   save(room, state, eligible, outcome = state.status) {
@@ -47,6 +71,7 @@ class MatchStore {
             ranks.get(result.nodeId));
         });
       }
+      this.clearActive(room.matchId);
       this.db.exec("COMMIT");
       return Boolean(inserted.changes);
     } catch (error) {

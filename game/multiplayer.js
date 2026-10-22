@@ -250,9 +250,10 @@ function renderMatch() {
 }
 function renderResults() {
   const state = room.state;
-  $("result-heading").textContent = room.status === "abandoned" ? "Match abandoned" :
+  $("result-heading").textContent = room.status === "interrupted" ? "Match interrupted" :
+    room.status === "abandoned" ? "Match abandoned" :
     state?.status === "won" ? "Network secured" : "Network fell short";
-  $("result-summary").textContent = `${state?.delivered ?? 0} / ${state?.target ?? 6} packets delivered. ${room.eligible ?
+  $("result-summary").textContent = room.reason || `${state?.delivered ?? 0} / ${state?.target ?? 6} packets delivered. ${room.eligible ?
     "This completed match counts toward the leaderboard." :
     "This inactive match does not count toward the leaderboard."}${room.persisted === false ?
     " Saving the result is retrying." : ""}`;
@@ -270,9 +271,9 @@ function renderResults() {
     line.append(detail);
     box.append(line);
   }
-  $("rematch-button").disabled = room.status === "abandoned" ||
+  $("rematch-button").disabled = room.status === "abandoned" || room.status === "interrupted" ||
     Boolean(room.players.find((p) => p.nodeId === room.myNode)?.ready);
-  $("rematch-button").textContent = room.status === "abandoned" ? "MATCH CLOSED" :
+  $("rematch-button").textContent = ["abandoned", "interrupted"].includes(room.status) ? "MATCH CLOSED" :
     $("rematch-button").disabled ? "WAITING FOR REMATCH" : "READY FOR REMATCH →";
   const host = room.players.find((p) => p.nodeId === room.hostNodeId);
   $("reopen-button").disabled = room.myNode !== room.hostNodeId && Boolean(host?.connected);
@@ -281,10 +282,10 @@ function render() {
   show("entry-panel", !room);
   show("lobby-panel", room?.status === "lobby" || room?.status === "starting");
   show("match-panel", room?.status === "playing");
-  show("results-panel", room?.status === "finished" || room?.status === "abandoned");
+  show("results-panel", ["finished", "abandoned", "interrupted"].includes(room?.status));
   if (room?.status === "lobby" || room?.status === "starting") renderLobby();
   if (room?.status === "playing") renderMatch();
-  if (room?.status === "finished" || room?.status === "abandoned") renderResults();
+  if (["finished", "abandoned", "interrupted"].includes(room?.status)) renderResults();
 }
 function updateTimer() {
   if (!room || room.status !== "playing") return;

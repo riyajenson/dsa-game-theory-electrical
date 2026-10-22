@@ -348,3 +348,44 @@ test("a room with everyone gone becomes an unranked abandoned record", async (t)
   assert.equal(saved.body.outcome, "abandoned");
   assert.equal(saved.body.eligible, 0);
 });
+
+test("restart terminates an active match visibly without ranking it", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "signalbound-restart-"));
+  const dbPath = path.join(directory, "matches.sqlite");
+  let server = createServer({ dbPath, turnSeconds: 20 });
+  let recovered;
+  t.after(async () => {
+    recovered?.socket.close();
+    server.rooms.close();
+    if (server.listening) await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = server.address().port;
+  const host = (await post(port, "/api/rooms", { name: "Ada" })).body;
+  const guest = (await post(port, `/api/rooms/${host.roomId}/join`, { name: "Lin" })).body;
+  const a = await live(port, host.roomId, host.token);
+  const b = await live(port, host.roomId, guest.token);
+  await a.next(); await b.next();
+  a.send("ready", { ready: true }); b.send("ready", { ready: true });
+  await until(a, "ready"); await until(a, "ready");
+  a.send("start"); const started = await until(a, "round_started");
+  a.send("action", { matchId: started.matchId, round: 1, action: "IDLE" });
+  await until(a, "accepted");
+  a.socket.close(); b.socket.close();
+  server.rooms.close();
+  await new Promise((resolve) => server.close(resolve));
+  server = createServer({ dbPath, turnSeconds: 20 });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const nextPort = server.address().port;
+  recovered = await live(nextPort, host.roomId, host.token);
+  const snapshot = await until(recovered, "snapshot");
+  assert.equal(snapshot.matchId, started.matchId);
+  assert.equal(snapshot.data.status, "interrupted");
+  assert.match(snapshot.data.reason, /restart/i);
+  assert.equal(snapshot.data.ownAction, null);
+  assert.equal((await get(nextPort, "/api/leaderboard")).body.entries.length, 0);
+  recovered.send("reopen");
+  assert.equal((await until(recovered, "lobby_open")).data.players.length, 1);
+  recovered.socket.close();
+});

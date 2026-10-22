@@ -7,6 +7,7 @@ const childProcess = require("node:child_process");
 const ROOT = path.resolve(__dirname, "..");
 const OUTPUT = path.join(ROOT, "simulation_cli.exe");
 const GAME_OUTPUT = path.join(ROOT, "game_cli.exe");
+const MULTIPLAYER_OUTPUT = path.join(ROOT, "multiplayer_cli.exe");
 const SOURCES = [
   "src/simulation_cli.cpp",
   "src/SimulationRunner.cpp",
@@ -53,14 +54,29 @@ function compileGame(options = {}) {
   return result.status === 0;
 }
 
+function compileMultiplayer(options = {}) {
+  const sources = ["src/multiplayer_cli.cpp", "src/MultiplayerSession.cpp",
+    "src/GameTheoryEngine.cpp", "src/NetworkGraph.cpp"];
+  const headers = ["src/MultiplayerSession.h", "src/GameSession.h",
+    "src/GameTheoryEngine.h", "src/NetworkGraph.h"];
+  const stale = !fs.existsSync(MULTIPLAYER_OUTPUT) || [...sources, ...headers].some((source) =>
+    fs.statSync(path.join(ROOT, source)).mtimeMs > fs.statSync(MULTIPLAYER_OUTPUT).mtimeMs);
+  if (!options.force && !stale) return true;
+  const spawnSync = options.spawnSync || childProcess.spawnSync;
+  const result = spawnSync("g++", ["-std=c++11", ...sources, "-o", "multiplayer_cli.exe"], {
+    cwd: ROOT, stdio: "inherit", windowsHide: true
+  });
+  return result.status === 0;
+}
+
 function main() {
-  if (!compileSimulation() || !compileGame()) {
+  if (!compileSimulation() || !compileGame() || !compileMultiplayer()) {
     console.error("Could not compile the C++ CLIs. Confirm that g++ is installed and on PATH.");
     process.exitCode = 1;
     return;
   }
   if (process.argv.includes("--check")) {
-    console.log("Game and simulation CLIs ready.");
+    console.log("Game, multiplayer, and simulation CLIs ready.");
     return;
   }
   const { createServer } = require("../server");
@@ -71,4 +87,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { compileSimulation, compileGame, needsCompilation };
+module.exports = { compileSimulation, compileGame, compileMultiplayer, needsCompilation };

@@ -1,0 +1,13 @@
+tenancy_ocid        = "REPLACE_WITH_TENANCY_OCID"
+compartment_ocid    = "REPLACE_WITH_COMPARTMENT_OCID"
+home_region         = "REPLACE_WITH_HOME_REGION"
+availability_domain = "REPLACE_WITH_AVAILABILITY_DOMAIN"
+image_ocid          = "REPLACE_WITH_UBUNTU_2404_AARCH64_IMAGE_OCID"
+ssh_source_cidr     = "REPLACE_WITH_TRUSTED_IP/32"
+ssh_public_key_path = "REPLACE_WITH_LOCAL_PUBLIC_KEY_PATH"
+public_dns_name     = "game.example.org"
+shape               = "VM.Standard.A1.Flex"
+ocpus               = 1
+memory_gb           = 6
+volume_gb           = 50
+data_mount_path     = "/srv/signalbound/data"

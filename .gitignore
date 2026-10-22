@@ -8,3 +8,13 @@ data/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+*.auto.tfvars
+*.tfvars.json
+*.pem
+*.key
+*.env

@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { RoomServer } = require("./room-server");
-const { loadConfig, trustedRequest } = require("./deployment-config");
+const { loadConfig, trustedRequest, logEvent } = require("./deployment-config");
 
 const ROOT = __dirname;
 const DASHBOARD_ROOT = path.join(ROOT, "dashboard");
@@ -188,6 +188,7 @@ function createServer(options = {}) {
   const rooms = new RoomServer({ ...options, dbPath: options.dbPath || config.dbPath,
     allowedOrigins: options.allowedOrigins || config.allowedOrigins.join(","),
     requireOrigin: config.mode === "production",
+    log: (level, event, fields) => logEvent(config, level, event, fields),
     turnSeconds: options.turnSeconds || config.turnSeconds });
   const isStorageReady = options.isStorageReady || (() => {
     return rooms.database().ready();
@@ -208,7 +209,10 @@ function createServer(options = {}) {
     if (request.method === "POST" &&
         (requestUrl.pathname === "/api/rooms" ||
          /^\/api\/rooms\/[A-Z2-9]{6}\/join$/.test(requestUrl.pathname))) {
-      if (!rooms.allowHttp(request.socket.remoteAddress || "unknown")) {
+      const address = config.mode === "production" ?
+        String(request.headers["x-real-ip"] || "unknown") :
+        (request.socket.remoteAddress || "unknown");
+      if (!rooms.allowHttp(address)) {
         sendError(response, 429, "RATE_LIMITED", "Too many room requests. Retry soon."); return;
       }
       if (!String(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
@@ -351,8 +355,8 @@ function createServer(options = {}) {
 if (require.main === module) {
   const config = loadConfig();
   createServer({ config }).listen(config.port, config.host, () => {
-    console.log(JSON.stringify({ level: "info", event: "listening", mode: config.mode,
-      host: config.host, port: config.port }));
+    logEvent(config, "info", "listening", { mode: config.mode,
+      host: config.host, port: config.port });
   });
 }
 

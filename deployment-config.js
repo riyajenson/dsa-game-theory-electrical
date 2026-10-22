@@ -27,7 +27,9 @@ function loadConfig(env = process.env) {
         !origin.hostname.includes(".") ||
         !["127.0.0.1", "::1"].includes(host) || trustProxy !== "loopback" ||
         allowedOrigins.length !== 1 || allowedOrigins[0] !== publicOrigin ||
-        !path.isAbsolute(dbPath) || !path.isAbsolute(dataDir) || turnSeconds < 20)
+        !env.SIGNALBOUND_DATA_DIR || !path.isAbsolute(dbPath) ||
+        !path.isAbsolute(dataDir) || path.relative(dataDir, dbPath).startsWith("..") ||
+        turnSeconds < 20)
       throw new Error("Unsafe production configuration");
   }
   return { mode, host, port, dataDir, dbPath, publicOrigin, allowedOrigins,
@@ -48,4 +50,12 @@ function trustedRequest(request, config) {
   return !forwardedHost || forwardedHost === request.headers.host;
 }
 
-module.exports = { loadConfig, trustedRequest };
+function logEvent(config, level, event, fields = {}) {
+  const rank = { info: 0, warn: 1, error: 2 };
+  if (rank[level] < rank[config.logLevel]) return;
+  const line = JSON.stringify({ time: new Date().toISOString(), level, event, ...fields });
+  if (level === "error") console.error(line);
+  else console.log(line);
+}
+
+module.exports = { loadConfig, trustedRequest, logEvent };

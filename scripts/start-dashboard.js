@@ -80,10 +80,11 @@ function main() {
     return;
   }
   const { createServer } = require("../server");
-  const config = require("../deployment-config").loadConfig();
+  const { loadConfig, logEvent } = require("../deployment-config");
+  const config = loadConfig();
   createServer({ config }).listen(config.port, config.host, () => {
-    console.log(JSON.stringify({ level: "info", event: "listening", mode: config.mode,
-      host: config.host, port: config.port }));
+    logEvent(config, "info", "listening", { mode: config.mode,
+      host: config.host, port: config.port });
   });
 }
 

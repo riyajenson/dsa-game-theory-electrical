@@ -90,6 +90,7 @@ class RoomServer {
       path.join(ROOT, "data", "matches.sqlite");
     this.store = null;
     this.recovered = false;
+    this.log = options.log || (() => {});
     this.httpRate = new Map();
     this.defaultTurnSeconds = options.turnSeconds || Number(process.env.TURN_SECONDS || 30);
     this.allowedOrigins = (options.allowedOrigins || process.env.ALLOWED_ORIGINS || "").split(",")
@@ -247,6 +248,8 @@ class RoomServer {
         this.emit(room, "abandoned", { reason: "All players inactive." });
       } else this.beginRound(room);
     } catch {
+      this.log("warn", "round_resolution_retry", { roomId: room.id,
+        matchId: room.matchId });
       room.timer = setTimeout(() => this.resolve(room), 1000);
       room.timer.unref?.();
       this.emit(room, "engine_retry", { message: "Round resolution is retrying." });
@@ -346,6 +349,7 @@ class RoomServer {
           !room.players.every((p) => p.ready)) return this.error(socket, room, "CANNOT_START");
       room.status = "starting";
       this.start(room).catch(() => {
+        this.log("warn", "match_start_retry", { roomId: room.id });
         room.status = "lobby";
         this.emit(room, "engine_retry", { message: "Engine unavailable. Try start again." });
       });

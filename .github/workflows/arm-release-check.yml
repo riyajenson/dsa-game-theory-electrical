@@ -1,0 +1,31 @@
+name: Arm release check
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'server.js'
+      - 'room-server.js'
+      - 'match-store.js'
+      - 'deployment-config.js'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'package.json'
+      - '.github/workflows/arm-release-check.yml'
+  pull_request:
+jobs:
+  arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.13.0'
+      - name: Verify architecture and native release
+        run: |
+          test "$(uname -m)" = aarch64
+          sudo apt-get update
+          sudo apt-get install -y g++
+          npm run check
+          file simulation_cli.exe game_cli.exe multiplayer_cli.exe
+          npm test

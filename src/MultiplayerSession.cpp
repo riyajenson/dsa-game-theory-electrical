@@ -122,8 +122,10 @@ void apply(MultiplayerState& state, const std::vector<NodeAction>& actions) {
     }
     state.round++;
     if (state.round == MAX_ROUNDS) state.status = state.delivered >= state.target ? "won" : "lost";
-    prepare(state);
-    turn.routeChanged = oldRoutes != state.routes;
+    if (state.status == "playing") {
+        prepare(state);
+        turn.routeChanged = oldRoutes != state.routes;
+    } else turn.routeChanged = false;
     state.rounds.push_back(turn);
 }
 

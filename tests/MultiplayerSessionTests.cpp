@@ -24,6 +24,25 @@ int main() {
         {{NodeAction::Transmit, NodeAction::Relay}})));
     assert(multiplayerToJson(cooperation).find("\"blockedBy\":0") != std::string::npos);
 
+    std::vector<std::vector<NodeAction> > draining(7,
+        {NodeAction::Transmit, NodeAction::Relay});
+    MultiplayerState exhausted = runMultiplayer(17, 2, draining);
+    assert(!exhausted.players[0].legal[0]);
+    bool cannotTransmit = false;
+    draining.push_back({NodeAction::Transmit, NodeAction::Idle});
+    try { runMultiplayer(17, 2, draining); }
+    catch (const std::invalid_argument&) { cannotTransmit = true; }
+    assert(cannotTransmit);
+
+    std::vector<std::vector<NodeAction> > quiet(7,
+        {NodeAction::Idle, NodeAction::Idle});
+    MultiplayerState lastPlayable = runMultiplayer(17, 2, quiet);
+    quiet.push_back({NodeAction::Idle, NodeAction::Idle});
+    MultiplayerState finished = runMultiplayer(17, 2, quiet);
+    assert(finished.status == "lost");
+    assert(finished.links[0].interference == lastPlayable.links[0].interference);
+    assert(finished.links[1].interference == lastPlayable.links[1].interference);
+
     bool invalid = false;
     try { runMultiplayer(17, 2, {{NodeAction::Transmit}}); }
     catch (const std::invalid_argument&) { invalid = true; }

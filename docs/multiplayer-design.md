@@ -1,0 +1,34 @@
+# Signalbound multiplayer design and implementation plan
+
+## Baseline and intent
+
+The clean `phase-6` worktree at `5e06a07` has a C++ single-player replay engine, a stateless Node HTTP API, and a separate analysis dashboard. Multiplayer is a separate mode. Two to four guests each own one of nodes 1–4; node 5 is the terminal. The server owns rooms and turns; C++ owns legality, routing, resolution, and score. Single-player `/api/game` and `/` stay playable.
+
+## Rules
+
+Eight simultaneous rounds. Every round each sensor may transmit one packet, relay packets crossing its node, sleep, or idle. Transmit costs 4 energy. Relay costs 3 energy and forwards every packet routed through that sensor that round. Sleep restores 1.5 energy and lowers reputation by 0.10. Idle costs 0.3 energy. Successful transmission raises reputation 0.02; failed transmission lowers it 0.03. Successful relay raises it 0.06; a relay with no demand has no trust benefit. Refusing a relay by sleeping costs trust; refusing by transmitting or idling forfeits the relay reward. A disconnected or timed-out sensor idles. A sensor lacking energy cannot transmit or relay. An exhausted sensor may still sleep or idle.
+
+The graph has fixed physical links and a seeded interference link each round. C++ finds the energy-aware route from each transmitting node to terminal 5 using energy and reputation penalties. A packet fails at the first intermediate node that did not choose Relay. Each delivered packet adds one to shared delivery. The network wins at least six deliveries in eight rounds. Each player's cumulative score is `20 × own deliveries + 12 × packets relayed + 4 × cooperative relay rounds + floor(10 × final reputation) + floor(final energy / 5) - 5 × selfish sleeps`. Delivered packets aid the team; helping another route can beat a transmission that blocks it. Routing, action effects, scoring, and messages are emitted by C++ after each replay. Individual rank sorts score descending, then own deliveries, packets relayed, final reputation, and node ID ascending.
+
+## Room and turn lifecycle
+
+Room codes are six uppercase unambiguous letters/digits. Creator is host and node 1. Join assigns the next free node. Guests have random 256-bit bearer tokens stored in browser local storage; the server stores token hashes in memory. Names are 1–20 printable characters. Lobby: join/leave, ready, host settings (20–90 second turn timer), start only with at least two ready players and all current players ready. Host transfers to the next player if the host leaves in lobby. Started roster is fixed. During play, disconnect does not remove a sensor; refresh with its token reclaims it. Each round accepts one action per player. All submitted resolves immediately; otherwise deadline fills missing actions with Idle. A serial room queue prevents concurrent resolutions. An inactive lobby expires after 30 minutes; an active match with nobody connected keeps using deadlines and becomes abandoned/unranked if no player submitted any real action for two consecutive rounds. A terminal match can rematch in the same room when all present players ready, resetting seed and scores. Old match IDs remain immutable.
+
+## Protocol and recovery
+
+HTTP `POST /api/rooms` creates; `POST /api/rooms/:code/join` joins; `GET /api/leaderboard` reads. Mutation and live updates use `/ws` WebSocket with protocol version 1. Client sends `{v:1,type,roomId,matchId?,round?,...}`: `hello` (token and `afterSeq`), `ready`, `settings`, `start`, `action`, `leave`, `rematch`. Server replies with `snapshot` and ordered `event` envelopes containing `v`, `roomId`, `matchId`, `seq`, `round`, `type`, `data`. A new connection always gets a snapshot, including the last resolved round. A reconnect may request `afterSeq`; server sends a current snapshot when the event gap is unavailable. Before resolution, public state exposes only each player's submitted boolean. The submitting player gets its own private action acknowledgment. Server validates exact fields, identity, room/match/round, action legality from C++ state, one accepted action per round, 4 KiB WebSocket message maximum, origin allowlist, and a per-connection message rate. Error envelopes have stable codes. No client supplies a node ID or score.
+
+## Engine and records
+
+`multiplayer_cli` accepts seed, fixed player count, and a compact ordered round action record (`T/R/S/I` per node, rounds separated by commas). It replays from initial state and emits JSON with nodes, links, current legal actions, routes, per-round packet and player effects, shared result, and ranked scores. The Node server holds accepted intents and calls the CLI once per resolved round. A failure leaves the round pending for retry; it never broadcasts a partial result. The match record stores seed, roster, ordered accepted/default actions, engine schema version, and final result. Replay with the same binary and record must give the same result.
+
+## Storage and operations
+
+Use local SQLite via Node's built-in `node:sqlite` with numbered migrations in `migrations/`. Completed, eligible matches are inserted once by unique match ID in one transaction with player result rows; leaderboard aggregates only those rows. Eligibility requires at least two distinct guests, a complete eight-round match, and at least one accepted action from each participant. Abandoned matches are saved for audit but excluded from ranking. Tie-break follows the individual rank fields, then earliest match completion. `SIGNALBOUND_DB_PATH`, `HOST`, `PORT`, and `ALLOWED_ORIGINS` configure local and future hosting; database file is ignored by git. Health reports engine and DB readiness. Oracle hosting later needs a persistent volume, process supervisor, TLS reverse proxy with WebSocket upgrade, explicit origins, and backups; no resources are provisioned here.
+
+## Milestones and verification
+
+1. Add C++ multiplayer replay/CLI and focused native tests for routing, actions, score, and deterministic replay. Compile it through the launcher. Verify and commit.
+2. Add SQLite migration/store, room lifecycle, WebSocket contract, deadlines, reconnect, validation, and focused protocol tests. Verify and commit.
+3. Add room/lobby, live match, animation, results/rematch, and leaderboard pages; preserve single player and dashboard. Verify and commit.
+4. Run full tests and checks, play two browser sessions with refresh, timeout, result, and rematch, inspect desktop and 390 px, update README, review changes, and commit.

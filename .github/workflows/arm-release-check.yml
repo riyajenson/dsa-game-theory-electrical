@@ -29,3 +29,7 @@ jobs:
           npm run check
           file simulation_cli.exe game_cli.exe multiplayer_cli.exe
           npm test
+          sh scripts/build-release.sh "$(git rev-parse --short=12 HEAD)" "$RUNNER_TEMP/release"
+          tar -xzf "$RUNNER_TEMP/release/signalbound-$(git rev-parse --short=12 HEAD)-linux-arm64.tar.gz" -C "$RUNNER_TEMP/release"
+          cd "$RUNNER_TEMP/release/signalbound"
+          sha256sum -c MANIFEST.sha256

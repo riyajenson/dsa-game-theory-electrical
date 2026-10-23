@@ -439,6 +439,10 @@ class RoomServer {
     for (const room of this.rooms.values()) {
       if (["lobby", "finished", "abandoned", "interrupted"].includes(room.status) &&
           now - room.lastActivity > 30 * 60 * 1000) {
+        if (room.status === "interrupted") {
+          try { this.database().clearActive(room.matchId); }
+          catch { continue; }
+        }
         this.rooms.delete(room.id);
         clearTimeout(room.timer);
         for (const player of room.players) for (const socket of player.sockets) socket.close();

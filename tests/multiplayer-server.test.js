@@ -7,6 +7,7 @@ const fs = require("node:fs");
 const test = require("node:test");
 const { createServer } = require("../server");
 const { engine } = require("../room-server");
+const { MatchStore } = require("../match-store");
 
 async function fixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "signalbound-room-"));
@@ -388,4 +389,21 @@ test("restart terminates an active match visibly without ranking it", async (t) 
   recovered.send("reopen");
   assert.equal((await until(recovered, "lobby_open")).data.players.length, 1);
   recovered.socket.close();
+});
+
+test("expired interrupted room removes its persisted guest roster", (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "signalbound-expiry-"));
+  const dbPath = path.join(directory, "matches.sqlite");
+  const store = new MatchStore(dbPath);
+  store.saveActive({ id: "ABC234", matchId: "match-expiry", seed: 17,
+    history: [], turnSeconds: 30, players: [{ name: "Ada", nodeId: 1,
+      tokenHash: "hash" }] }, { round: 0 });
+  store.db.close();
+  const server = createServer({ dbPath });
+  t.after(() => { server.rooms.close(); fs.rmSync(directory, { recursive: true, force: true }); });
+  server.rooms.database();
+  server.rooms.rooms.get("ABC234").lastActivity = Date.now() - 31 * 60 * 1000;
+  server.rooms.sweep();
+  assert.equal(server.rooms.database().db.prepare(
+    "SELECT count(*) AS n FROM active_rooms").get().n, 0);
 });

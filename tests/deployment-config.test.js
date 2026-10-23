@@ -2,6 +2,9 @@
 const assert = require("node:assert/strict");
 const http = require("node:http");
 const crypto = require("node:crypto");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 const { loadConfig } = require("../deployment-config");
 const { createServer } = require("../server");
@@ -28,11 +31,15 @@ test("production configuration requires a single HTTPS origin, loopback and pers
 
 test("production rejects direct requests and accepts forwarded HTTPS on its public host", async (t) => {
   const config = loadConfig(production);
-  const server = createServer({ config, isSimulationReady: () => true,
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "signalbound-config-"));
+  const server = createServer({ config, dbPath: path.join(directory, "matches.sqlite"),
+    isSimulationReady: () => true,
     isGameReady: () => true, isMultiplayerReady: () => true,
     isStorageReady: () => true });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => { server.rooms.close(); return new Promise((resolve) => server.close(resolve)); });
+  t.after(async () => { server.rooms.close();
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(directory, { recursive: true, force: true }); });
   const request = (headers, path = "/api/live") => new Promise((resolve, reject) => {
     const call = http.get({ hostname: "127.0.0.1", port: server.address().port,
       path, headers }, (response) => { response.resume(); response.on("end", () =>

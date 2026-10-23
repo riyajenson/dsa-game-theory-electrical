@@ -7,6 +7,7 @@ packages:
   - make
   - nginx
   - certbot
+  - ufw
 users:
   - default
   - name: signalbound

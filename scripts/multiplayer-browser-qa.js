@@ -3,9 +3,10 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
+const BASE_URL = process.env.QA_BASE_URL || "http://127.0.0.1:3000";
 
 async function tab(port, width, height) {
-  const target = await (await fetch(`http://127.0.0.1:${port}/json/new?http://127.0.0.1:3000/multiplayer`,
+  const target = await (await fetch(`http://127.0.0.1:${port}/json/new?${BASE_URL}/multiplayer`,
     { method: "PUT" })).json();
   const socket = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
@@ -39,7 +40,7 @@ async function tab(port, width, height) {
   await send("Page.enable"); await send("Runtime.enable");
   await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1,
     mobile: width < 500 });
-  await send("Page.navigate", { url: "http://127.0.0.1:3000/multiplayer" });
+  await send("Page.navigate", { url: `${BASE_URL}/multiplayer` });
   await until("document.readyState === 'complete' && Boolean(document.getElementById('entry-panel'))", true);
   await evaluate("localStorage.clear()");
   await send("Page.reload", { ignoreCache: true });

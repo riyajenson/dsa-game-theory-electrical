@@ -35,6 +35,10 @@ variable "memory_gb" {
 variable "ssh_source_cidr" {
   type        = string
   description = "Trusted operator IPv4 CIDR, preferably one /32 address."
+  validation {
+    condition     = can(cidrnetmask(var.ssh_source_cidr)) && try(cidrnetmask(var.ssh_source_cidr), "") != "0.0.0.0"
+    error_message = "Use a restricted trusted IPv4 CIDR for SSH; 0.0.0.0/0 is not allowed."
+  }
 }
 variable "ssh_public_key_path" {
   type        = string
@@ -44,8 +48,13 @@ variable "public_dns_name" {
   type = string
 }
 variable "data_mount_path" {
-  type    = string
-  default = "/srv/signalbound/data"
+  type        = string
+  description = "Fixed mount path used by the pilot service, environment, and runbook."
+  default     = "/srv/signalbound/data"
+  validation {
+    condition     = var.data_mount_path == "/srv/signalbound/data"
+    error_message = "This pilot mounts data at /srv/signalbound/data; update all service and operator templates before changing it."
+  }
 }
 variable "volume_gb" {
   type    = number

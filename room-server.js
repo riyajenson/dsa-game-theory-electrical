@@ -92,6 +92,10 @@ class RoomServer {
     this.recovered = false;
     this.log = options.log || (() => {});
     this.httpRate = new Map();
+    this.maxRooms = options.maxRooms || 200;
+    this.authTimeoutMs = options.authTimeoutMs || 10000;
+    this.maxPendingSockets = options.maxPendingSockets || 64;
+    this.pendingSockets = new Set();
     this.defaultTurnSeconds = options.turnSeconds || Number(process.env.TURN_SECONDS || 30);
     this.allowedOrigins = (options.allowedOrigins || process.env.ALLOWED_ORIGINS || "").split(",")
       .map((value) => value.trim()).filter(Boolean);
@@ -135,6 +139,7 @@ class RoomServer {
   }
   create(name) {
     this.database();
+    if (this.rooms.size >= this.maxRooms) throw new Error("ROOM_CAPACITY");
     const { token, member } = this.player(name, 1);
     let id;
     do { id = randomCode(); } while (this.rooms.has(id));
@@ -319,6 +324,8 @@ class RoomServer {
       if (!player) return this.error(socket, null, "NOT_MEMBER");
       if (socket.player) socket.player.sockets.delete(socket);
       socket.room = room; socket.player = player;
+      clearTimeout(socket.authTimer);
+      this.pendingSockets.delete(socket);
       player.sockets.add(socket);
       room.lastActivity = Date.now();
       this.snapshot(room, player, socket);
@@ -407,6 +414,9 @@ class RoomServer {
     } else this.error(socket, room, "INVALID_MESSAGE");
   }
   upgrade(request, socket, head) {
+    if (this.pendingSockets.size >= this.maxPendingSockets) {
+      socket.end("HTTP/1.1 503 Service Unavailable\r\n\r\n"); return;
+    }
     try { this.database(); }
     catch { socket.end("HTTP/1.1 503 Service Unavailable\r\n\r\n"); return; }
     const url = new URL(request.url, "http://localhost");
@@ -426,12 +436,18 @@ class RoomServer {
     socket.write("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n" +
       "Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + "\r\n\r\n");
     const wire = new WireSocket(socket, (message) => this.handle(wire, message), () => {
+      clearTimeout(wire.authTimer);
+      this.pendingSockets.delete(wire);
       if (wire.player) {
         wire.player.sockets.delete(wire);
         this.emit(wire.room, "presence", { nodeId: wire.player.nodeId,
           connected: wire.player.sockets.size > 0 });
       }
     });
+    this.pendingSockets.add(wire);
+    wire.authTimer = setTimeout(() => { if (!wire.player) wire.close(); },
+      this.authTimeoutMs);
+    wire.authTimer.unref?.();
     if (head.length) wire.read(head, (message) => this.handle(wire, message));
   }
   sweep() {
@@ -455,6 +471,7 @@ class RoomServer {
     if (this.closed) return;
     this.closed = true;
     clearInterval(this.sweeper);
+    for (const wire of this.pendingSockets) wire.close();
     for (const room of this.rooms.values()) {
       clearTimeout(room.timer);
       for (const timer of room.saveTimers || []) clearTimeout(timer);

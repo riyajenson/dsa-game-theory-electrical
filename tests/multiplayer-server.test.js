@@ -9,6 +9,52 @@ const { createServer } = require("../server");
 const { engine } = require("../room-server");
 const { MatchStore } = require("../match-store");
 
+test("room creation stops at configured public capacity", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "signalbound-capacity-"));
+  const server = createServer({ dbPath: path.join(directory, "matches.sqlite"), maxRooms: 2 });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const port = server.address().port;
+  assert.equal((await post(port, "/api/rooms", { name: "A" })).status, 201);
+  assert.equal((await post(port, "/api/rooms", { name: "B" })).status, 201);
+  const blocked = await post(port, "/api/rooms", { name: "C" });
+  assert.equal(blocked.status, 429);
+  assert.equal(blocked.body.error.code, "ROOM_CAPACITY");
+});
+
+test("unauthenticated WebSockets expire", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "signalbound-ws-idle-"));
+  const server = createServer({ dbPath: path.join(directory, "matches.sqlite"),
+    authTimeoutMs: 100, maxPendingSockets: 1 });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${server.address().port}/ws`);
+  t.after(() => socket.close());
+  await new Promise((resolve, reject) => {
+    socket.addEventListener("open", resolve, { once: true });
+    socket.addEventListener("error", reject, { once: true });
+  });
+  const second = new WebSocket(`ws://127.0.0.1:${server.address().port}/ws`);
+  t.after(() => second.close());
+  await new Promise((resolve, reject) => {
+    second.addEventListener("error", resolve, { once: true });
+    second.addEventListener("open", () => reject(new Error("Pending socket cap failed")),
+      { once: true });
+  });
+  const closed = new Promise((resolve, reject) => {
+    socket.addEventListener("close", resolve, { once: true });
+    socket.addEventListener("error", reject, { once: true });
+  });
+  await Promise.race([closed, new Promise((_, reject) => setTimeout(() =>
+    reject(new Error("Unauthenticated socket remained open")), 1000))]);
+});
+
 async function fixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "signalbound-room-"));
   const server = createServer({ dbPath: path.join(directory, "matches.sqlite"),

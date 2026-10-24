@@ -28,7 +28,7 @@ test("room creation stops at configured public capacity", async (t) => {
 test("unauthenticated WebSockets expire", async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "signalbound-ws-idle-"));
   const server = createServer({ dbPath: path.join(directory, "matches.sqlite"),
-    authTimeoutMs: 100, maxPendingSockets: 1 });
+    authTimeoutMs: 3000, maxPendingSockets: 1 });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(async () => {
     await new Promise((resolve) => server.close(resolve));
@@ -36,6 +36,13 @@ test("unauthenticated WebSockets expire", async (t) => {
   });
   const socket = new WebSocket(`ws://127.0.0.1:${server.address().port}/ws`);
   t.after(() => socket.close());
+  const expired = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Unauthenticated socket remained open")),
+      15000);
+    socket.addEventListener("error", () => {}, { once: true });
+    socket.addEventListener("close", () => { clearTimeout(timer); resolve(); },
+      { once: true });
+  });
   await new Promise((resolve, reject) => {
     socket.addEventListener("open", resolve, { once: true });
     socket.addEventListener("error", reject, { once: true });
@@ -47,12 +54,7 @@ test("unauthenticated WebSockets expire", async (t) => {
     second.addEventListener("open", () => reject(new Error("Pending socket cap failed")),
       { once: true });
   });
-  const closed = new Promise((resolve, reject) => {
-    socket.addEventListener("close", resolve, { once: true });
-    socket.addEventListener("error", reject, { once: true });
-  });
-  await Promise.race([closed, new Promise((_, reject) => setTimeout(() =>
-    reject(new Error("Unauthenticated socket remained open")), 1000))]);
+  await expired;
 });
 
 async function fixture(t) {

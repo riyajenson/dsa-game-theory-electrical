@@ -445,7 +445,7 @@ class RoomServer {
       }
     });
     this.pendingSockets.add(wire);
-    wire.authTimer = setTimeout(() => { if (!wire.player) wire.close(); },
+    wire.authTimer = setTimeout(() => { if (!wire.player) wire.socket.destroy(); },
       this.authTimeoutMs);
     wire.authTimer.unref?.();
     if (head.length) wire.read(head, (message) => this.handle(wire, message));

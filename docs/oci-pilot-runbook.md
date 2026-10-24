@@ -33,20 +33,135 @@ sudo mv /opt/node-v24.21.0-linux-arm64 /opt/node-v24.21.0
 /opt/node-v24.21.0/bin/node --version
 ```
 
-In the local phase-6 worktree, record `git rev-parse HEAD`; create a release archive with `git archive HEAD | gzip > signalbound-<commit>.tar.gz`. Transfer it to the VM only after the gate. On the VM, substitute the reviewed commit and archive:
+Build the release from a clean Git archive on Linux **aarch64** (physical Arm or the local QEMU container below). `scripts/build-release.sh` requires Node 24.21.0 and `g++`, checks all three AArch64 ELF binaries, and emits a deterministic runtime-only archive, an outer SHA256 file, and an inner per-file `MANIFEST.sha256`. The archive contains the server, UI and font assets, migrations, backup and smoke tools, and service/proxy templates. It excludes C++ sources, tests, local databases, credentials, Terraform files, and other development files. On an Arm build host:
+
+```sh
+COMMIT=$(git rev-parse --short=12 HEAD)
+mkdir -p "/tmp/signalbound-build-$COMMIT" /tmp/signalbound-releases
+git archive HEAD | tar -x -C "/tmp/signalbound-build-$COMMIT"
+cd "/tmp/signalbound-build-$COMMIT"
+npm run check
+npm test
+sh scripts/build-release.sh "$COMMIT" /tmp/signalbound-releases
+cd /tmp/signalbound-releases
+sha256sum -c "signalbound-$COMMIT-linux-arm64.tar.gz.sha256"
+mkdir -p inspect
+tar -xzf "signalbound-$COMMIT-linux-arm64.tar.gz" -C inspect
+cd inspect/signalbound
+sha256sum -c MANIFEST.sha256
+readelf -h multiplayer_cli.exe | grep Machine
+```
+
+Transfer only the reviewed release archive and its `.sha256` file to the VM after the deployment gate. On the VM, substitute the reviewed commit:
 
 ```sh
 RELEASE=<commit>
 sudo mkdir -p "/srv/signalbound/releases/$RELEASE"
-sudo tar -xzf "/tmp/signalbound-$RELEASE.tar.gz" -C "/srv/signalbound/releases/$RELEASE"
+cd /tmp
+sha256sum -c "signalbound-$RELEASE-linux-arm64.tar.gz.sha256"
+sudo tar -xzf "signalbound-$RELEASE-linux-arm64.tar.gz" --strip-components=1 -C "/srv/signalbound/releases/$RELEASE"
 sudo chown -R signalbound:signalbound "/srv/signalbound/releases/$RELEASE"
 cd "/srv/signalbound/releases/$RELEASE"
-sudo -u signalbound /opt/node-v24.21.0/bin/node scripts/start-dashboard.js --check
-sudo -u signalbound /opt/node-v24.21.0/bin/node scripts/test-native.js multiplayer
-file simulation_cli.exe game_cli.exe multiplayer_cli.exe
+sha256sum -c MANIFEST.sha256
+readelf -h multiplayer_cli.exe | grep Machine
+sudo -u signalbound ./simulation_cli.exe --rounds 1 --strategy mixed >/dev/null
+sudo -u signalbound ./game_cli.exe --seed 17 --profile mixed --actions '' >/dev/null
+sudo -u signalbound ./multiplayer_cli.exe --seed 17 --players 2 --rounds '' >/dev/null
 ```
 
-The `.exe` suffix is historical; Linux executes these locally compiled ELF files. The [Arm CI workflow](../.github/workflows/arm-release-check.yml) repeats the full build and tests on `ubuntu-24.04-arm`; a Windows x86 pass is not Arm evidence. The workflow is not claimed as run until its job reports success.
+The `.exe` suffix is historical; Linux executes these locally compiled ELF files. The [Arm CI workflow](../.github/workflows/arm-release-check.yml) repeats the full build, tests, and bundle integrity check on `ubuntu-24.04-arm`; it has not run without a push. Local Docker/QEMU is **emulated Arm**, not proof of execution on an OCI A1 VM. At the later deployment gate, record `uname -m` = `aarch64`, run the three binary checks above and `scripts/smoke.js`, then complete a two-device HTTPS/WSS match on the actual VM.
+
+## Local Arm and operations rehearsal
+
+The 2026-10-24 rehearsal used Docker Desktop's Linux engine on x86 with `tonistiigi/binfmt` QEMU `arm64` emulation and `node:24.21.0-bookworm` (Node 24.21.0, Debian 12 `g++`). It built all three AArch64 ELFs, passed the native suites and 25 Node tests at commit `3aa0600`, then passed the focused Arm SQLite test at `53ce3f5`. The first clean-archive `npm test` failed because the engine CLIs had not yet been built; the repeat followed the CI order, `npm run check` then `npm test`, and passed. This does not replace an A1 hardware run.
+
+From PowerShell in the clean worktree, with Docker Desktop running, reproduce the Arm build and clean-bundle checks (do not bind mount the Windows worktree itself, which may contain x86 binaries):
+
+```powershell
+docker run --privileged --rm tonistiigi/binfmt --install arm64
+docker run --rm --platform linux/arm64 node:24.21.0-bookworm uname -m
+$commit = git rev-parse --short=12 HEAD
+$qa = Join-Path $env:TEMP "signalbound-arm-$commit"
+New-Item -ItemType Directory -Force -Path $qa | Out-Null
+git archive --format=tar -o (Join-Path $qa 'source.tar') HEAD
+tar -xf (Join-Path $qa 'source.tar') -C $qa
+docker run --rm --platform linux/arm64 -v "${qa}:/work" -w /work node:24.21.0-bookworm sh -c "npm run check && npm test && sh scripts/build-release.sh $commit /work/out"
+docker run --rm --platform linux/arm64 -v "${qa}:/work" -w /work node:24.21.0-bookworm sh -c "cd out && sha256sum -c signalbound-$commit-linux-arm64.tar.gz.sha256 && mkdir -p /work/clean && tar -xzf signalbound-$commit-linux-arm64.tar.gz -C /work/clean && cd /work/clean/signalbound && sha256sum -c MANIFEST.sha256 && readelf -h multiplayer_cli.exe | grep Machine && test ! -e src && test ! -e tests && test ! -e infra"
+```
+
+The `uname -m` command must print `aarch64`. The bundle SHA256 was identical on two runs from unchanged inputs. `scripts/rehearse-local.js` runs two independent Node WSS clients through the local TLS proxy, completes an eligible match with one timed-out turn, restarts the container during a rematch, reconnects both tokens, checks the interruption reason in their snapshots, and checks that the interrupted match is unranked. Create the disposable local container from the extracted bundle:
+
+```powershell
+Copy-Item scripts/local-tls-proxy.js (Join-Path $qa 'local-tls-proxy.js')
+New-Item -ItemType Directory -Force -Path (Join-Path $qa 'data') | Out-Null
+docker run --rm --platform linux/arm64 -v "${qa}:/app" node:24.21.0-bookworm openssl req -x509 -newkey rsa:2048 -nodes -keyout /app/key.pem -out /app/cert.pem -days 2 -subj /CN=localhost -addext subjectAltName=IP:127.0.0.1
+docker run -d --name signalbound-rehearsal --platform linux/arm64 -p 127.0.0.1:3443:3443 -v "${qa}:/app" -w /app/clean/signalbound -e TURN_SECONDS=3 -e SIGNALBOUND_DB_PATH=/app/data/matches.sqlite -e TLS_HOST=0.0.0.0 -e TLS_CERT=/app/cert.pem -e TLS_KEY=/app/key.pem node:24.21.0-bookworm sh -c "node server.js & node /app/local-tls-proxy.js & wait"
+Start-Sleep -Seconds 3
+docker exec signalbound-rehearsal node scripts/smoke.js http://127.0.0.1:3000
+```
+
+For this local certificate only, run:
+
+```powershell
+$env:NODE_TLS_REJECT_UNAUTHORIZED = '0'
+node scripts/rehearse-local.js https://127.0.0.1:3443 signalbound-rehearsal
+Remove-Item Env:NODE_TLS_REJECT_UNAUTHORIZED
+```
+
+The local proxy needs `TLS_HOST=0.0.0.0` **inside Docker** and a loopback-only host publication, `-p 127.0.0.1:3443:3443`; its default remains loopback. Run `node scripts/smoke.js http://127.0.0.1:3000` inside the container after each release switch. Rehearsed backup and restore with the bundle's tool:
+
+```powershell
+docker exec signalbound-rehearsal node scripts/sqlite-backup.js backup /app/data/matches.sqlite /app/data/backup.sqlite
+docker exec signalbound-rehearsal node scripts/sqlite-backup.js verify /app/data/backup.sqlite
+docker stop signalbound-rehearsal
+docker run --rm --platform linux/arm64 -v "${qa}:/app" -w /app/clean/signalbound node:24.21.0-bookworm node scripts/sqlite-backup.js restore /app/data/backup.sqlite /app/data/restored.sqlite
+docker run -d --name signalbound-restored --platform linux/arm64 -p 127.0.0.1:3443:3443 -v "${qa}:/app" -w /app/clean/signalbound -e TURN_SECONDS=3 -e SIGNALBOUND_DB_PATH=/app/data/restored.sqlite -e TLS_HOST=0.0.0.0 -e TLS_CERT=/app/cert.pem -e TLS_KEY=/app/key.pem node:24.21.0-bookworm sh -c "node server.js & node /app/local-tls-proxy.js & wait"
+Start-Sleep -Seconds 3
+docker exec signalbound-restored node scripts/smoke.js http://127.0.0.1:3000
+docker exec signalbound-restored node scripts/sqlite-backup.js verify /app/data/restored.sqlite
+docker stop signalbound-restored
+docker rm signalbound-restored
+docker rm signalbound-rehearsal
+```
+
+The isolated restored database reported one completed match and two leaderboard rows. To rehearse upgrade and rollback, repeat the build block for a newer commit into `$newQa`, keep `$qa` and its data, and switch only the app mount. Run this after the restore block, which removed the old containers:
+
+```powershell
+function Start-LocalRelease([string]$releaseRoot) {
+  docker run -d --name signalbound-rehearsal --platform linux/arm64 -p 127.0.0.1:3443:3443 -v "${releaseRoot}:/app" -v "${qa}:/pilot" -w /app/clean/signalbound -e TURN_SECONDS=3 -e SIGNALBOUND_DB_PATH=/pilot/data/matches.sqlite -e TLS_HOST=0.0.0.0 -e TLS_CERT=/pilot/cert.pem -e TLS_KEY=/pilot/key.pem node:24.21.0-bookworm sh -c "node server.js & node /pilot/local-tls-proxy.js & wait"
+  Start-Sleep -Seconds 3
+  docker exec signalbound-rehearsal node scripts/smoke.js http://127.0.0.1:3000
+  docker exec signalbound-rehearsal node scripts/sqlite-backup.js verify /pilot/data/matches.sqlite
+}
+Start-LocalRelease $newQa
+docker stop signalbound-rehearsal
+docker rm signalbound-rehearsal
+Start-LocalRelease $qa
+docker stop signalbound-rehearsal
+docker rm signalbound-rehearsal
+```
+
+Switching from the older bundle to the newer bundle and back while keeping the original data mount passed the smoke and SQLite checks. An in-place production restore still requires stopping the service and preserving all original SQLite, WAL, and SHM files as described below. The local test used a separate restore path to avoid modifying the live store.
+
+## Public endpoint review
+
+Room codes are discoverable join handles, not credentials. Guest bearer tokens are random, stored as hashes in SQLite and in browser local storage, and scoped to a room member; there is no durable person identity or collusion resistance. The server checks membership before accepting actions or host-only start/settings requests and never accepts client scores. Production requires the exact HTTPS Origin for POST and WebSocket requests and trusted loopback proxy headers; nginx overwrites forwarded protocol, host, Origin, and real IP. Inputs are bounded (16 KiB HTTP body, 4 KiB WebSocket message), with HTTP and WebSocket message rates. Public pilot limits now cap rooms at 200, pending unauthenticated sockets at 64, and unauthenticated socket lifetime at 10 seconds. Leaderboard writes are unique by match ID and only eligible completed matches rank. Responses use stable errors; logs omit bearer tokens and request bodies. These controls limit ordinary abuse but do not replace an edge DDoS service or authenticated player accounts.
+
+## OCI input worksheet for later
+
+| Input | Value | Where to verify |
+| --- | --- | --- |
+| Tenancy OCID |  | OCI Console → tenancy details |
+| Compartment OCID |  | Identity & Security → Compartments |
+| Home region | `ap-hyderabad-1` (verify on account) | Tenancy details |
+| Availability domain |  | Compute placement / tenancy limits |
+| Ubuntu 24.04 aarch64 image OCID |  | Compute image picker in the home region; confirm A1 compatibility |
+| Trusted SSH source CIDR |  | Operator's public network boundary, preferably a single `/32` |
+| Public SSH key path |  | Existing local **public** key file; never provide a private key |
+| Public DNS name |  | DNS zone controlled by the operator |
+| Spending ceiling |  | Operator's pilot budget after reviewing account-specific plan and pricing |
+
+Do not put credentials in this worksheet. No tenancy-specific plan, OCI access, DNS change, or deployment was part of the local rehearsal.
 
 ## Data volume and service
 

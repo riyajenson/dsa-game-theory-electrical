@@ -21,6 +21,8 @@ test("online WAL backup restores completed matches and leaderboard", async (t) =
       { nodeId: 2, score: 40, ownDelivered: 0, relayed: 2, reputation: 0.7 }] };
   assert.equal(store.save(room, state, true), true);
   await backupDatabase(source, snapshot);
+  assert.deepEqual(fs.readdirSync(directory).filter((name) =>
+    name.startsWith(".snapshot.sqlite") || name.startsWith("snapshot.sqlite-")), []);
   assert.equal(verifyDatabase(snapshot).matches, 1);
   restoreDatabase(snapshot, restored);
   const recovered = new MatchStore(restored);

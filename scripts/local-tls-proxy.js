@@ -6,6 +6,7 @@ const net = require("node:net");
 
 const backendPort = Number(process.env.BACKEND_PORT || 3000);
 const listenPort = Number(process.env.TLS_PORT || 3443);
+const listenHost = process.env.TLS_HOST || "127.0.0.1";
 const cert = fs.readFileSync(process.env.TLS_CERT);
 const key = fs.readFileSync(process.env.TLS_KEY);
 const forwarded = (headers) => ({ ...headers, "x-forwarded-proto": "https",
@@ -30,5 +31,5 @@ proxy.on("upgrade", (request, socket, head) => {
   upstream.on("error", () => socket.destroy());
   socket.on("error", () => upstream.destroy());
 });
-proxy.listen(listenPort, "127.0.0.1", () =>
-  console.log(`Local TLS proxy listening on https://127.0.0.1:${listenPort}`));
+proxy.listen(listenPort, listenHost, () =>
+  console.log(`Local TLS proxy listening on https://${listenHost}:${listenPort}`));

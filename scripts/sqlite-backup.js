@@ -15,6 +15,11 @@ function verifyDatabase(filename) {
   } finally { db.close(); }
 }
 
+function removeSidecars(filename) {
+  for (const suffix of ["-wal", "-shm"])
+    if (fs.existsSync(filename + suffix)) fs.unlinkSync(filename + suffix);
+}
+
 async function backupDatabase(source, destination) {
   if (!fs.existsSync(source) || fs.existsSync(destination) ||
       path.resolve(source) === path.resolve(destination))
@@ -24,13 +29,15 @@ async function backupDatabase(source, destination) {
   const db = new DatabaseSync(source, { readOnly: true });
   try {
     await backup(db, temporary);
-    verifyDatabase(temporary);
+    const result = verifyDatabase(temporary);
+    removeSidecars(temporary);
     fs.chmodSync(temporary, 0o600);
     fs.renameSync(temporary, destination);
-    return verifyDatabase(destination);
+    return result;
   } finally {
     db.close();
     if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+    removeSidecars(temporary);
   }
 }
 

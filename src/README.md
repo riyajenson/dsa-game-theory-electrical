@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This folder contains the C++ implementation for the Phase 1 game-theory decision engine, the Phase 2 graph routing engine, and the Phase 4 simulation metrics engine.
+This folder contains the C++ implementation for the Phase 1 game-theory decision engine, the Phase 2 graph routing engine, and the Phase 4 simulation metrics engine. Phase 5 adds a dependency-free static dashboard; see [`dashboard/README.md`](../dashboard/README.md) for local preview and scope details.
 
 ## Files
 
@@ -48,5 +48,5 @@ g++ -std=c++11 tests/SimulationMetricsTests.cpp src/GameTheoryEngine.cpp src/Sim
 
 ## Current Scope
 
-The current module supports Phase 1 game-theory decisions, Phase 2 graph-based routing, and Phase 4 deterministic simulation metrics. Dynamic programming planning, dashboard visualization, persistent simulation data, and richer packet-level simulation remain planned for later phases.
+The current module supports Phase 1 game-theory decisions, Phase 2 graph-based routing, Phase 4 deterministic simulation metrics, and the Phase 5 local dashboard. Dynamic programming planning, live dashboard data, persistent simulation data, and richer packet-level simulation remain planned for later phases.
 

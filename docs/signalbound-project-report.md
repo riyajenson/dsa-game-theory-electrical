@@ -94,7 +94,7 @@ The destination receives no node penalty. A strict `<` relaxation preserves the 
 
 ### 3.4 Planning and the three scores
 
-The dashboard compares a one-step greedy utility choice to a memoized finite-horizon dynamic program of at most 20 rounds. The DP state key includes round, energy rounded to tenths, reputation rounded to hundredths, relay requests, successful relays, and selfish decisions. It explores up to four actions per reachable state; for **S** reachable states over horizon **H**, time is O(4S) (with map lookup overhead) and stored paths can take O(HS). Greedy evaluates four actions per round, O(4H). Both use a simplified forecast that treats feasible Transmit/Relay as delivered; they are **planning illustrations**, not an exact opponent policy for live multiplayer. The default five-round dashboard case gives both five Relays, utility 38, and final planner energy 58, so the report makes no claim that DP wins that sample.
+The dashboard compares a one-step greedy utility choice to a memoized finite-horizon dynamic program of at most 20 rounds. The DP state key includes round, energy rounded to tenths, reputation rounded to hundredths, relay requests, successful relays, and selfish decisions. It explores up to four actions per reachable state. For **S** reachable states over horizon **H**, the map lookup and copied action vectors give a conservative O(4S(log S + H)) time bound and O(HS) stored path space. Greedy evaluates four actions per round, O(4H). Both use a simplified forecast that treats feasible Transmit/Relay as delivered; they are **planning illustrations**, not an exact opponent policy for live multiplayer. The default five-round dashboard case gives both five Relays, utility 38, and final planner energy 58, so the report makes no claim that DP wins that sample.
 
 The dashboard counts attempted and delivered *action operations* across nodes in its batch run; it does not require a simultaneous end-to-end chain. Solo increments shared delivery for a successful player Transmit or even-round Relay. Its final score is rounded from `100·delivered + 20·(delivered/attempted) + E + 50R − 10·selfishDecisions + 35·ownDelivered`. Solo wins at round eight with ≥6 deliveries, R≥0.60, and positive E. Multiplayer delivers a Transmit only if a powered route exists and **every intermediate human node selected Relay in that same round**. Its network wins at ≥6 delivered packets after eight rounds. Player score is recalculated as `20·ownDelivered + 12·packetsRelayed + 4·cooperativeRelayRounds + floor(10R) + floor(E/5) − 5·selfishSleeps`. This couples self-interest to helping others: an immediate Transmit can block a neighbor's packet that needed one's Relay, while perpetual Relay wastes energy when no traffic uses that node. Results rank score, then own deliveries, relayed packets, reputation, and lower node ID. Leaderboard ties additionally prefer earlier completion before node ID.
 
@@ -186,6 +186,9 @@ From the repository worktree with **Node 24.21.0 or newer for local development*
 ```sh
 npm run check
 npm test
+node scripts/test-native.js game_balance
+node --test tests/multiplayer-server.test.js
+node --test tests/sqlite-backup.test.js
 npm start
 # Visit http://127.0.0.1:3000/ , /multiplayer , /dashboard
 ./simulation_cli.exe --rounds 5 --strategy mixed
@@ -194,7 +197,7 @@ npm start
 node scripts/smoke.js http://127.0.0.1:3000
 ```
 
-The `.exe` suffix is historical; an Arm release contains Linux AArch64 ELF executables. On Windows PowerShell, use `./...` or `.\...` as appropriate. The exact Docker/QEMU build, local TLS/WSS playthrough, backup/restore, and rollback commands are in [`oci-pilot-runbook.md`](oci-pilot-runbook.md), sections “Build and release on Arm” and “Local Arm and operations rehearsal.” For the proposed OCI IaC, `cd infra/oci && terraform fmt -check && terraform init -backend=false -input=false && terraform validate` is a local structural check, **not** a tenancy-specific plan.
+The focused commands above overlap with `npm test`; they are listed to make the major evidence repeatable individually. The `.exe` suffix is historical; an Arm release contains Linux AArch64 ELF executables. On Windows PowerShell, use `./...` or `.\...` as appropriate. After starting the browser QA harness described in the README, run `node scripts/browser-qa.js` and `node scripts/multiplayer-browser-qa.js`. The earlier local WSS test used `node scripts/rehearse-local.js https://127.0.0.1:3443 signalbound-rehearsal` **after** the runbook's local TLS container setup. The exact Docker/QEMU build, backup/restore, and rollback commands are in [`oci-pilot-runbook.md`](oci-pilot-runbook.md), sections “Build and release on Arm” and “Local Arm and operations rehearsal.” For the proposed OCI IaC, `cd infra/oci && terraform fmt -check && terraform init -backend=false -input=false && terraform validate` is a local structural check, **not** a tenancy-specific plan.
 
 ## Appendix B. Interface examples and repository map
 

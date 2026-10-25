@@ -252,7 +252,7 @@ def build():
                 story.append(Preformatted("\n".join(code), STYLES["code"], maxLineLength=85))
             else:
                 for raw in code:
-                    story.append(para("`" + raw + "`", "small"))
+                    story.append(Spacer(1, 4) if not raw else para("`" + raw + "`", "small"))
             index += 1
             continue
         if line.startswith("|"):
@@ -280,7 +280,7 @@ def build():
             continue
         if line.startswith("## "):
             heading = line[3:]
-            story.append(CondPageBreak(85))
+            story.append(CondPageBreak(350 if heading.startswith("Appendix C") else 85))
             story.append(para(heading, "subtitle" if heading.startswith("A technical") else "h2"))
             index += 1
             continue

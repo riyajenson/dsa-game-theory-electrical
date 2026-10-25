@@ -14,6 +14,7 @@ const SIMULATION_CLI = path.join(ROOT, "simulation_cli.exe");
 const GAME_CLI = path.join(ROOT, "game_cli.exe");
 const MULTIPLAYER_CLI = path.join(ROOT, "multiplayer_cli.exe");
 const MAX_BODY_BYTES = 16 * 1024;
+const RENDER_TEST_NOTICE = '<div role="status" style="position:relative;z-index:1000;padding:10px 16px;background:#fbd36d;color:#17232c;text-align:center;font:700 14px/1.4 system-ui,sans-serif">TEMPORARY PUBLIC TEST · Rooms and leaderboard can disappear on restart, redeploy, or idle spin-down.</div>';
 
 const CONTENT_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -135,7 +136,7 @@ function runGameProcess(input) {
   });
 }
 
-function serveStatic(requestPath, response) {
+function serveStatic(requestPath, response, config) {
   const dashboard = requestPath === "/dashboard" || requestPath === "/dashboard/" ||
     requestPath.startsWith("/dashboard/");
   const root = dashboard ? DASHBOARD_ROOT : GAME_ROOT;
@@ -154,11 +155,14 @@ function serveStatic(requestPath, response) {
     return;
   }
   const resolvedPath = path.join(root, relativePath);
-  fs.readFile(resolvedPath, (error, content) => {
+  fs.readFile(resolvedPath, (error, fileContent) => {
     if (error) {
       sendError(response, 404, "NOT_FOUND", "Resource not found.");
       return;
     }
+    const content = config.mode === "render-test" && relativePath.endsWith(".html") ?
+      Buffer.from(fileContent.toString("utf8").replace("<body>",
+        `<body>\n${RENDER_TEST_NOTICE}`), "utf8") : fileContent;
     response.writeHead(200, {
       "content-type": CONTENT_TYPES[path.extname(resolvedPath)] ||
         "application/octet-stream",
@@ -187,7 +191,7 @@ function createServer(options = {}) {
       ["--seed", "17", "--players", "2", "--rounds", ""]));
   const rooms = new RoomServer({ ...options, dbPath: options.dbPath || config.dbPath,
     allowedOrigins: options.allowedOrigins || config.allowedOrigins.join(","),
-    requireOrigin: config.mode === "production",
+    requireOrigin: config.mode !== "local",
     log: (level, event, fields) => logEvent(config, level, event, fields),
     turnSeconds: options.turnSeconds || config.turnSeconds });
   const isStorageReady = options.isStorageReady || (() => {
@@ -199,10 +203,11 @@ function createServer(options = {}) {
     if (request.method === "GET" && requestUrl.pathname === "/api/live") {
       sendJson(response, 200, { status: "ok" }); return;
     }
-    if (!trustedRequest(request, config)) {
+    if (!trustedRequest(request, config) && !(config.mode === "render-test" &&
+        request.method === "GET" && requestUrl.pathname === "/api/health")) {
       sendError(response, 403, "UNTRUSTED_PROXY", "Secure proxy required."); return;
     }
-    if (config.mode === "production" && request.method === "POST" &&
+    if (config.mode !== "local" && request.method === "POST" &&
         request.headers.origin !== config.publicOrigin) {
       sendError(response, 403, "INVALID_ORIGIN", "Public origin required."); return;
     }
@@ -336,7 +341,7 @@ function createServer(options = {}) {
     }
 
     if (request.method === "GET" && !requestUrl.pathname.startsWith("/api/")) {
-      serveStatic(requestUrl.pathname, response);
+      serveStatic(requestUrl.pathname, response, config);
       return;
     }
 

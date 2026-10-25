@@ -3,19 +3,22 @@ const path = require("node:path");
 
 function loadConfig(env = process.env) {
   const mode = env.SIGNALBOUND_ENV || "local";
-  if (!["local", "production"].includes(mode)) throw new Error("Invalid SIGNALBOUND_ENV");
+  if (!["local", "production", "render-test"].includes(mode))
+    throw new Error("Invalid SIGNALBOUND_ENV");
   const host = env.HOST || "127.0.0.1";
   const port = Number(env.PORT || 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");
   const dataDir = env.SIGNALBOUND_DATA_DIR || path.join(__dirname, "data");
   const dbPath = env.SIGNALBOUND_DB_PATH || path.join(dataDir, "matches.sqlite");
-  const publicOrigin = env.PUBLIC_ORIGIN || null;
-  const allowedOrigins = (env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const publicOrigin = mode === "render-test" ? env.RENDER_EXTERNAL_URL :
+    (env.PUBLIC_ORIGIN || null);
+  const allowedOrigins = mode === "render-test" ? [publicOrigin] :
+    (env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
   const trustProxy = env.TRUST_PROXY || "none";
   const cookieMode = env.COOKIE_MODE || "none";
   const logLevel = env.LOG_LEVEL || "info";
   const turnSeconds = Number(env.TURN_SECONDS || 30);
-  if (!["none", "loopback"].includes(trustProxy) || cookieMode !== "none" ||
+  if (!["none", "loopback", "render"].includes(trustProxy) || cookieMode !== "none" ||
       !["info", "warn", "error"].includes(logLevel) ||
       !Number.isFinite(turnSeconds) || turnSeconds < 0.1 || turnSeconds > 90)
     throw new Error("Invalid deployment setting");
@@ -32,6 +35,21 @@ function loadConfig(env = process.env) {
         turnSeconds < 20)
       throw new Error("Unsafe production configuration");
   }
+  if (mode === "render-test") {
+    let origin;
+    try { origin = new URL(publicOrigin); }
+    catch { throw new Error("Invalid Render test origin"); }
+    if (env.RENDER !== "true" || origin.protocol !== "https:" ||
+        origin.origin !== publicOrigin ||
+        !origin.hostname.endsWith(".onrender.com") ||
+        origin.hostname === ".onrender.com" ||
+        (env.PUBLIC_ORIGIN && env.PUBLIC_ORIGIN !== publicOrigin) ||
+        (env.ALLOWED_ORIGINS && env.ALLOWED_ORIGINS !== publicOrigin) ||
+        host !== "0.0.0.0" || !env.PORT || trustProxy !== "render" ||
+        dataDir !== "/tmp/signalbound" ||
+        dbPath !== path.join(dataDir, "matches.sqlite") || turnSeconds < 20)
+      throw new Error("Unsafe Render test configuration");
+  }
   return { mode, host, port, dataDir, dbPath, publicOrigin, allowedOrigins,
     trustProxy, cookieMode, logLevel, turnSeconds };
 }
@@ -42,8 +60,9 @@ function isLoopback(address) {
 }
 
 function trustedRequest(request, config) {
-  if (config.mode !== "production") return true;
-  if (!isLoopback(request.socket.remoteAddress)) return false;
+  if (config.mode === "local") return true;
+  if (config.mode === "production" && !isLoopback(request.socket.remoteAddress))
+    return false;
   if (request.headers.host !== new URL(config.publicOrigin).host) return false;
   if (request.headers["x-forwarded-proto"] !== "https") return false;
   const forwardedHost = request.headers["x-forwarded-host"];

@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { loadConfig } = require("../deployment-config");
+const { loadConfig, trustedRequest } = require("../deployment-config");
 const { createServer } = require("../server");
 
 const production = { SIGNALBOUND_ENV: "production", HOST: "127.0.0.1", PORT: "3000",
@@ -14,6 +14,43 @@ const production = { SIGNALBOUND_ENV: "production", HOST: "127.0.0.1", PORT: "30
   TRUST_PROXY: "loopback", SIGNALBOUND_DB_PATH: "/srv/signalbound/data/matches.sqlite",
   SIGNALBOUND_DATA_DIR: "/srv/signalbound/data",
   COOKIE_MODE: "none", LOG_LEVEL: "info" };
+
+const renderTest = { SIGNALBOUND_ENV: "render-test", RENDER: "true",
+  RENDER_EXTERNAL_URL: "https://signalbound-test.onrender.com",
+  HOST: "0.0.0.0", PORT: "10000", TRUST_PROXY: "render",
+  SIGNALBOUND_DATA_DIR: "/tmp/signalbound", COOKIE_MODE: "none" };
+
+test("Render test uses only its assigned HTTPS origin and temporary data directory", () => {
+  const config = loadConfig(renderTest);
+  assert.equal(config.mode, "render-test");
+  assert.equal(config.publicOrigin, renderTest.RENDER_EXTERNAL_URL);
+  assert.deepEqual(config.allowedOrigins, [renderTest.RENDER_EXTERNAL_URL]);
+  assert.equal(config.host, "0.0.0.0");
+  assert.equal(config.port, 10000);
+  assert.equal(config.dbPath, path.join("/tmp/signalbound", "matches.sqlite"));
+  for (const bad of [
+    { RENDER: undefined }, { RENDER_EXTERNAL_URL: "http://signalbound-test.onrender.com" },
+    { RENDER_EXTERNAL_URL: "https://other.example.org" },
+    { HOST: "127.0.0.1" }, { PORT: undefined }, { TRUST_PROXY: "loopback" },
+    { SIGNALBOUND_DATA_DIR: "data" }, { SIGNALBOUND_DATA_DIR: "/srv/signalbound" },
+    { PUBLIC_ORIGIN: "https://wrong.onrender.com" },
+    { ALLOWED_ORIGINS: "https://wrong.onrender.com" }, { COOKIE_MODE: "insecure" }
+  ]) assert.throws(() => loadConfig({ ...renderTest, ...bad }));
+});
+
+test("Render test accepts only forwarded HTTPS for its own host", () => {
+  const config = loadConfig(renderTest);
+  const req = (headers) => ({ headers, socket: { remoteAddress: "10.0.0.4" } });
+  assert.equal(trustedRequest(req({ host: "signalbound-test.onrender.com",
+    "x-forwarded-proto": "https" }), config), true);
+  for (const headers of [
+    { host: "signalbound-test.onrender.com" },
+    { host: "wrong.onrender.com", "x-forwarded-proto": "https" },
+    { host: "signalbound-test.onrender.com", "x-forwarded-proto": "http" },
+    { host: "signalbound-test.onrender.com", "x-forwarded-proto": "https",
+      "x-forwarded-host": "wrong.onrender.com" }
+  ]) assert.equal(trustedRequest(req(headers), config), false);
+});
 
 test("production configuration requires a single HTTPS origin, loopback and persistent path", () => {
   assert.equal(loadConfig(production).publicOrigin, "https://signal.example.org");

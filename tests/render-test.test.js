@@ -44,7 +44,11 @@ function upgrade(port, originHeader) {
     call.on("response", (response) => {
       response.resume(); response.on("end", () => resolve(response.statusCode));
     });
-    call.on("error", reject);
+    call.on("error", (error) => {
+      if (originHeader === origin) reject(error);
+      else if (error.code === "ECONNRESET") resolve(403);
+      else reject(error);
+    });
     call.end();
   });
 }

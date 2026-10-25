@@ -4,6 +4,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const BASE_URL = process.env.QA_BASE_URL || "http://127.0.0.1:3000";
+const TURN_WAIT_MS = Number(process.env.QA_TURN_WAIT_MS || 10000);
+if (!Number.isSafeInteger(TURN_WAIT_MS) || TURN_WAIT_MS < 1000 || TURN_WAIT_MS > 120000)
+  throw new Error("QA_TURN_WAIT_MS must be an integer from 1000 to 120000");
 
 async function tab(port, width, height) {
   const target = await (await fetch(`http://127.0.0.1:${port}/json/new?${BASE_URL}/multiplayer`,
@@ -90,7 +93,7 @@ async function main() {
     assert.equal(await a.evaluate("room.state.delivered"), 1);
     await a.screenshot("desktop-resolution");
     await a.evaluate("document.querySelectorAll('#multi-actions button')[0].click()");
-    await a.until("room?.state?.round === 2", true, 10000);
+    await a.until("room?.state?.round === 2", true, TURN_WAIT_MS);
     assert.equal(await a.evaluate("room.state.history[1].actions[1]"), "IDLE");
     assert.equal(await a.evaluate("room.state.history[1].packets[0].blockedBy"), 2);
     for (let round = 3; round <= 7; ++round) {

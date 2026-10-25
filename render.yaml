@@ -6,7 +6,7 @@ services:
     plan: free
     branch: render-free-playtest
     numInstances: 1
-    buildCommand: npm run check
+    buildCommand: sh scripts/check-render-linux.sh
     startCommand: node server.js
     healthCheckPath: /api/health
     autoDeployTrigger: "off"

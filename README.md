@@ -114,6 +114,14 @@ Spark-01, four distinct AI/terminal sprites, terrain, relay ruins, interference,
 
 ## Hosting later
 
+### Temporary Render Free playtest
+
+The dedicated `render-free-playtest` branch has a [single-service Free Blueprint](render.yaml) and [playtest runbook](docs/render-free-playtest.md). Its native Node 24.21.0 build compiles the C++ CLIs on Render's Linux CPU; `node server.js` starts one room process on Render's `PORT`. Render supplies its own HTTPS URL and WSS upgrade proxy. The `render-test` mode derives the sole allowed origin from `RENDER_EXTERNAL_URL`, binds `0.0.0.0`, and stores SQLite under `/tmp/signalbound`. It issues no cookies; room guest tokens stay in browser local storage. The pages visibly label this deployment as a temporary test.
+
+Run `npm run check` and `npm test` before pushing that branch. The build command is `sh scripts/check-render-linux.sh`, start command `node server.js`, and health path `/api/health`. The required Blueprint variables are `SIGNALBOUND_ENV=render-test`, `HOST=0.0.0.0`, `TRUST_PROXY=render`, `SIGNALBOUND_DATA_DIR=/tmp/signalbound`, `COOKIE_MODE=none`, and `TURN_SECONDS=30`; Render injects `PORT`, `RENDER`, and `RENDER_EXTERNAL_URL`. The Blueprint declares one Free service with no disk or database and automatic deploys off. Inspect the Render plan and workspace billing controls before creation. Run `node scripts/smoke.js https://<assigned-host>.onrender.com` after deploy.
+
+**All rooms, match records, and leaderboard history on Render Free may disappear on restart, redeploy, or idle spin-down.** A live match never earns a completed result when interrupted. Render currently documents spin-down after 15 minutes without inbound traffic and a cold start that can take about a minute. Use the runbook for public two-browser play, refresh/timeout/rematch checks, manual redeploy, and service deletion. This playtest is separate from the durable OCI pilot below; no OCI resource or setting is needed for Render.
+
 The [OCI pilot runbook](docs/oci-pilot-runbook.md) and [Terraform configuration](infra/oci/main.tf) prepare one Ubuntu 24.04 Arm VM, a persistent SQLite volume, systemd, and nginx TLS/WSS. No cloud resources were provisioned or deployed. Production requires `SIGNALBOUND_ENV=production`, `PUBLIC_ORIGIN=https://<dns>`, matching `ALLOWED_ORIGINS`, `TRUST_PROXY=loopback`, `HOST=127.0.0.1`, and absolute persistent `SIGNALBOUND_DATA_DIR` and `SIGNALBOUND_DB_PATH`; see [environment example](deploy/signalbound.env.example). `COOKIE_MODE=none` reflects bearer sessions in local storage. Active matches become visibly interrupted and unranked after a restart; completed matches and the guest leaderboard persist. Use one server process. A second process needs a shared room coordinator.
 
 For a local HTTPS/WSS proxy test on Windows, generate a short-lived self-signed certificate outside this repository (OpenSSL from Git for Windows is shown):

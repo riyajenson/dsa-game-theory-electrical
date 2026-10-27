@@ -1,0 +1,27 @@
+# Disposable Signalbound playtest. One Free service, no disk or database service.
+services:
+  - type: web
+    name: signalbound-render-playtest
+    runtime: node
+    plan: free
+    branch: render-free-playtest
+    numInstances: 1
+    buildCommand: sh scripts/check-render-linux.sh
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: SIGNALBOUND_ENV
+        value: render-test
+      - key: HOST
+        value: 0.0.0.0
+      - key: TRUST_PROXY
+        value: render
+      - key: COOKIE_MODE
+        value: none
+      - key: SIGNALBOUND_DATA_DIR
+        value: /tmp/signalbound
+      - key: TURN_SECONDS
+        value: "30"
+      - key: LOG_LEVEL
+        value: info

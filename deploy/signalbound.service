@@ -1,0 +1,27 @@
+[Unit]
+Description=Signalbound single-process game server
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/srv/signalbound/data
+
+[Service]
+Type=simple
+User=signalbound
+Group=signalbound
+WorkingDirectory=/srv/signalbound/current
+EnvironmentFile=/etc/signalbound/signalbound.env
+ExecStart=/opt/node-v24.21.0/bin/node server.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+KillSignal=SIGTERM
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/srv/signalbound/data
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

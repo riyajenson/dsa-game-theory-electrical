@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c1425">
+  <title>Signalbound Multiplayer</title>
+  <link rel="stylesheet" href="/game.css"><link rel="stylesheet" href="/polish.css">
+  <link rel="stylesheet" href="/multiplayer.css">
+  <script src="/art.js" defer></script><script src="/multiplayer.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <div class="brand"><span class="brand-mark">✦</span><div><span class="overline">GRIDMIND / FIELD OPS</span><h1>Signalbound<span class="cursor">_</span></h1></div></div>
+      <nav aria-label="Primary"><a href="/">SOLO</a><a class="nav-active" href="/multiplayer">MULTIPLAYER</a><a href="/dashboard">ANALYSIS ↗</a></nav>
+      <div class="header-right"><span class="live-dot"></span><span id="connection-state">CONNECTING</span></div>
+    </header>
+    <div id="notice" class="connection-banner hidden" role="alert"></div>
+    <main class="multi-layout">
+      <section id="entry-panel" class="multi-card entry-panel">
+        <span class="overline">MULTIPLAYER / SAME NETWORK</span>
+        <h2>Create a room</h2>
+        <p>Two to four people control one sensor each. Share the code to play from another browser or device.</p>
+        <label class="field">YOUR NAME <input id="guest-name" maxlength="20" autocomplete="nickname" placeholder="Sensor pilot" required></label>
+        <button id="create-room" class="confirm" type="button">CREATE ROOM →</button>
+        <div class="join-row"><label class="field">ROOM CODE <input id="room-code" maxlength="6" placeholder="ABC234" autocapitalize="characters"></label><button id="join-room" type="button">JOIN →</button></div>
+        <p class="help">Guest tokens stay in this browser. Refresh restores your sensor while this server keeps the room open.</p>
+      </section>
+      <section id="lobby-panel" class="multi-card hidden">
+        <span class="overline">ROOM LOBBY / WAITING FOR SENSORS</span>
+        <h2>Room <span id="lobby-code"></span></h2>
+        <p>Share this code. Every player must be ready before the host starts.</p>
+        <ul id="lobby-players" class="roster"></ul>
+        <div class="lobby-controls"><label class="field">TURN TIMER <select id="turn-seconds"><option value="20">20 seconds</option><option value="30" selected>30 seconds</option><option value="45">45 seconds</option><option value="60">60 seconds</option><option value="90">90 seconds</option></select></label><span>8 rounds · Deliver 6 packets · 2–4 players</span></div>
+        <div class="button-row"><button id="ready-button" class="confirm" type="button">READY</button><button id="start-button" class="confirm" type="button">START MATCH →</button><button id="leave-button" type="button">LEAVE ROOM</button></div>
+      </section>
+      <section id="match-panel" class="hidden">
+        <div class="mission-bar"><div><span class="overline">SHARED OBJECTIVE</span><strong>Deliver 6 packets in 8 rounds.</strong></div><div>DELIVERED <b id="team-delivered">0 / 6</b> · ROUND <b id="match-round">1 / 8</b> · <b id="timer">30s</b></div><div>ROOM <b id="match-code"></b></div></div>
+        <div class="multi-main">
+          <section class="world-panel"><div class="panel-top"><div><span class="overline">SECTOR 07 / LIVE NETWORK</span><h2>The relay grid</h2></div><span id="turn-status" class="round-chip">CHOOSE YOUR ACTION</span></div><div class="map-frame"><svg id="game-map" viewBox="0 0 640 416" role="img" aria-label="Sensor network map"></svg></div><div class="map-footer">MINT = ENERGY AWARE ROUTE · CORAL = INTERFERENCE · PACKETS MOVE AFTER RESOLUTION</div></section>
+          <aside class="multi-side"><section class="player-card"><span class="overline">YOUR SENSOR</span><h2 id="my-node">NODE 01</h2><p id="my-position">Position: network source</p><div class="stat"><div class="stat-label"><span>BATTERY</span><strong id="my-energy">28.0</strong></div><div class="track"><span id="my-energy-bar" class="fill energy"></span></div></div><div class="stat"><div class="stat-label"><span>REPUTATION</span><strong id="my-reputation">60%</strong></div><div class="track"><span id="my-reputation-bar" class="fill reputation"></span></div></div><div class="mini-stats"><div><span>OWN</span><strong id="my-own">0</strong></div><div><span>RELAYED</span><strong id="my-relayed">0</strong></div><div><span>SCORE</span><strong id="my-score">0</strong></div></div></section>
+          <section class="dispatch-card"><span class="overline">PRIVATE ACTION / SIMULTANEOUS TURN</span><h2>Choose your move</h2><p>Actions stay hidden until everyone submits or time runs out. Missing actions become Idle.</p><div id="multi-actions" class="action-grid"></div><p id="action-help" class="control-help">Transmit costs 4. Relay costs 3. Sleep gains 1.5 but loses 10% trust. Idle costs 0.3.</p></section></aside>
+        </div>
+        <div class="bottom-panel"><section class="network-readout"><span class="overline">TEAM / ROSTER</span><ul id="match-players" class="roster"></ul></section><section class="event-feed"><span class="overline">RESOLVED ROUND</span><div id="round-report">Waiting for the first turn.</div><ol id="packet-report"></ol></section></div>
+      </section>
+      <section id="results-panel" class="multi-card hidden"><span class="overline">MATCH COMPLETE / FINAL REPORT</span><h2 id="result-heading">Network result</h2><p id="result-summary"></p><div id="result-ranking" class="ranking"></div><div class="button-row"><button id="rematch-button" class="confirm" type="button">READY FOR REMATCH →</button><button id="reopen-button" type="button">OPEN LOBBY / REPLACE PLAYERS</button><button id="results-leave" type="button">LEAVE ROOM</button></div><p>Rank: score, own deliveries, packets relayed, final reputation, then node number.</p></section>
+      <section class="multi-card leaderboard"><span class="overline">PERSISTENT RECORDS</span><h2>Leaderboard</h2><p>Complete matches with an accepted action from every player. Abandoned matches are excluded.</p><ol id="leaderboard-list"><li>No eligible matches yet.</li></ol></section>
+      <section class="multi-card rules"><span class="overline">FIELD MANUAL / MULTIPLAYER</span><h2>Make every decision count</h2><p>Every Transmit sends one packet along the C++ energy aware route to terminal 05. Each intermediate sensor must choose Relay that round. A refusal or empty route loses the packet. Low energy and low trust can change the route. Relay forwards all packets crossing your sensor, earning 12 points per packet plus 4 for a helpful round. An own delivery earns 20 points. Final score also counts trust and remaining battery, and subtracts 5 per Sleep. Sleep can keep a sensor alive for later rounds, while Relay can open a teammate’s route.</p></section>
+    </main>
+    <footer>ORIGINAL PIXEL ART · <a href="/">SINGLE PLAYER</a> · <a href="/dashboard">ANALYSIS DASHBOARD</a></footer>
+  </div>
+</body>
+</html>

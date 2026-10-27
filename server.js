@@ -1,16 +1,20 @@
 "use strict";
 
-const { execFile } = require("node:child_process");
+const { execFile, execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
+const { RoomServer } = require("./room-server");
+const { loadConfig, trustedRequest, logEvent } = require("./deployment-config");
 
 const ROOT = __dirname;
 const DASHBOARD_ROOT = path.join(ROOT, "dashboard");
 const GAME_ROOT = path.join(ROOT, "game");
 const SIMULATION_CLI = path.join(ROOT, "simulation_cli.exe");
 const GAME_CLI = path.join(ROOT, "game_cli.exe");
+const MULTIPLAYER_CLI = path.join(ROOT, "multiplayer_cli.exe");
 const MAX_BODY_BYTES = 16 * 1024;
+const RENDER_TEST_NOTICE = '<div role="status" style="position:relative;z-index:1000;padding:10px 16px;background:#fbd36d;color:#17232c;text-align:center;font:700 14px/1.4 system-ui,sans-serif">TEMPORARY PUBLIC TEST · Rooms and leaderboard can disappear on restart, redeploy, or idle spin-down.</div>';
 
 const CONTENT_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -132,15 +136,18 @@ function runGameProcess(input) {
   });
 }
 
-function serveStatic(requestPath, response) {
+function serveStatic(requestPath, response, config) {
   const dashboard = requestPath === "/dashboard" || requestPath === "/dashboard/" ||
     requestPath.startsWith("/dashboard/");
   const root = dashboard ? DASHBOARD_ROOT : GAME_ROOT;
   const relativePath = dashboard
     ? (requestPath === "/dashboard" || requestPath === "/dashboard/" ? "index.html" : requestPath.slice(11))
-    : (requestPath === "/" ? "index.html" : requestPath.slice(1));
+    : (requestPath === "/" ? "index.html" :
+      requestPath === "/multiplayer" || requestPath === "/multiplayer/" ?
+        "multiplayer.html" : requestPath.slice(1));
   const allowed = dashboard ? ["index.html", "styles.css", "app.js"] :
-    ["index.html", "game.css", "polish.css", "art.js", "audio.js", "game.js",
+    ["index.html", "multiplayer.html", "multiplayer.css", "multiplayer.js",
+      "game.css", "polish.css", "art.js", "audio.js", "game.js",
       "assets/PressStart2P-Regular.ttf",
       "assets/SpaceGrotesk-Regular.ttf"];
   if (!allowed.includes(relativePath)) {
@@ -148,11 +155,14 @@ function serveStatic(requestPath, response) {
     return;
   }
   const resolvedPath = path.join(root, relativePath);
-  fs.readFile(resolvedPath, (error, content) => {
+  fs.readFile(resolvedPath, (error, fileContent) => {
     if (error) {
       sendError(response, 404, "NOT_FOUND", "Resource not found.");
       return;
     }
+    const content = config.mode === "render-test" && relativePath.endsWith(".html") ?
+      Buffer.from(fileContent.toString("utf8").replace("<body>",
+        `<body>\n${RENDER_TEST_NOTICE}`), "utf8") : fileContent;
     response.writeHead(200, {
       "content-type": CONTENT_TYPES[path.extname(resolvedPath)] ||
         "application/octet-stream",
@@ -164,13 +174,92 @@ function serveStatic(requestPath, response) {
 }
 
 function createServer(options = {}) {
+  const config = options.config || loadConfig();
+  const usable = (file, args) => {
+    try { JSON.parse(execFileSync(file, args, { cwd: ROOT, timeout: 3000,
+      windowsHide: true, maxBuffer: 1024 * 1024 }).toString()); return true; }
+    catch { return false; }
+  };
   const runSimulation = options.runSimulation || runSimulationProcess;
   const runGame = options.runGame || runGameProcess;
   const isSimulationReady = options.isSimulationReady ||
-    (() => fs.existsSync(SIMULATION_CLI));
+    (() => usable(SIMULATION_CLI, ["--rounds", "1", "--strategy", "mixed"]));
+  const isGameReady = options.isGameReady || (() => usable(GAME_CLI,
+    ["--seed", "17", "--profile", "mixed", "--actions", ""]));
+  const isMultiplayerReady = options.isMultiplayerReady ||
+    (() => usable(MULTIPLAYER_CLI,
+      ["--seed", "17", "--players", "2", "--rounds", ""]));
+  const rooms = new RoomServer({ ...options, dbPath: options.dbPath || config.dbPath,
+    allowedOrigins: options.allowedOrigins || config.allowedOrigins.join(","),
+    requireOrigin: config.mode !== "local",
+    log: (level, event, fields) => logEvent(config, level, event, fields),
+    turnSeconds: options.turnSeconds || config.turnSeconds });
+  const isStorageReady = options.isStorageReady || (() => {
+    return rooms.database().ready();
+  });
 
-  return http.createServer(async (request, response) => {
+  const server = http.createServer(async (request, response) => {
     const requestUrl = new URL(request.url, "http://127.0.0.1");
+    if (request.method === "GET" && requestUrl.pathname === "/api/live") {
+      sendJson(response, 200, { status: "ok" }); return;
+    }
+    if (!trustedRequest(request, config) && !(config.mode === "render-test" &&
+        request.method === "GET" && requestUrl.pathname === "/api/health")) {
+      sendError(response, 403, "UNTRUSTED_PROXY", "Secure proxy required."); return;
+    }
+    if (config.mode !== "local" && request.method === "POST" &&
+        request.headers.origin !== config.publicOrigin) {
+      sendError(response, 403, "INVALID_ORIGIN", "Public origin required."); return;
+    }
+    if (request.method === "POST" &&
+        (requestUrl.pathname === "/api/rooms" ||
+         /^\/api\/rooms\/[A-Z2-9]{6}\/join$/.test(requestUrl.pathname))) {
+      const address = config.mode === "production" ?
+        String(request.headers["x-real-ip"] || "unknown") :
+        (request.socket.remoteAddress || "unknown");
+      if (!rooms.allowHttp(address)) {
+        sendError(response, 429, "RATE_LIMITED", "Too many room requests. Retry soon."); return;
+      }
+      if (!String(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
+        sendError(response, 415, "UNSUPPORTED_MEDIA_TYPE", "Use application/json."); return;
+      }
+      let body;
+      try { body = await readJsonBody(request); }
+      catch { sendError(response, 400, "INVALID_JSON", "Invalid JSON body."); return; }
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).join(",") !== "name") {
+        sendError(response, 400, "INVALID_INPUT", "Send a name only."); return;
+      }
+      try {
+        const code = requestUrl.pathname.split("/")[3];
+        const result = code ? rooms.join(code, body.name) : rooms.create(body.name);
+        sendJson(response, code ? 200 : 201, result);
+      } catch (error) {
+        const known = ["ROOM_NOT_FOUND", "ROOM_CLOSED", "INVALID_NAME", "ROOM_CAPACITY"];
+        if (!known.includes(error.message)) {
+          sendError(response, 503, "STORAGE_UNAVAILABLE", "Room storage unavailable.");
+        } else {
+          const status = error.message === "ROOM_NOT_FOUND" ? 404 :
+            error.message === "ROOM_CLOSED" ? 409 :
+            error.message === "ROOM_CAPACITY" ? 429 : 400;
+          sendError(response, status, error.message, error.message.replaceAll("_", " "));
+        }
+      }
+      return;
+    }
+    if (request.method === "GET" && requestUrl.pathname === "/api/leaderboard") {
+      try { sendJson(response, 200, { schemaVersion: 1, entries: rooms.database().leaderboard() }); }
+      catch { sendError(response, 503, "STORAGE_UNAVAILABLE", "Leaderboard unavailable."); }
+      return;
+    }
+    if (request.method === "GET" && /^\/api\/matches\/[a-f0-9-]{36}$/.test(requestUrl.pathname)) {
+      try {
+        const match = rooms.database().match(requestUrl.pathname.split("/")[3]);
+        if (match) sendJson(response, 200, match);
+        else sendError(response, 404, "NOT_FOUND", "Match not found.");
+      } catch { sendError(response, 503, "STORAGE_UNAVAILABLE", "Match record unavailable."); }
+      return;
+    }
     if (request.method === "POST" && requestUrl.pathname === "/api/game") {
       if (!String(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
         sendError(response, 415, "UNSUPPORTED_MEDIA_TYPE", "Use application/json.");
@@ -193,9 +282,16 @@ function createServer(options = {}) {
       return;
     }
     if (request.method === "GET" && requestUrl.pathname === "/api/health") {
-      sendJson(response, 200, {
-        status: "ok",
-        simulationReady: Boolean(isSimulationReady())
+      let storageReady = false;
+      try { storageReady = Boolean(isStorageReady()); }
+      catch { storageReady = false; }
+      const simulationReady = Boolean(isSimulationReady());
+      const gameReady = Boolean(isGameReady());
+      const multiplayerReady = Boolean(isMultiplayerReady());
+      const healthy = simulationReady && gameReady && multiplayerReady && storageReady;
+      sendJson(response, healthy ? 200 : 503, {
+        status: healthy ? "ok" : "degraded",
+        simulationReady, gameReady, multiplayerReady, storageReady
       });
       return;
     }
@@ -245,17 +341,28 @@ function createServer(options = {}) {
     }
 
     if (request.method === "GET" && !requestUrl.pathname.startsWith("/api/")) {
-      serveStatic(requestUrl.pathname, response);
+      serveStatic(requestUrl.pathname, response, config);
       return;
     }
 
     sendError(response, 404, "NOT_FOUND", "Resource not found.");
   });
+  server.on("upgrade", (request, socket, head) => {
+    if (!trustedRequest(request, config)) {
+      socket.end("HTTP/1.1 403 Forbidden\r\n\r\n"); return;
+    }
+    rooms.upgrade(request, socket, head);
+  });
+  server.on("close", () => rooms.close());
+  server.rooms = rooms;
+  return server;
 }
 
 if (require.main === module) {
-  createServer().listen(3000, "127.0.0.1", () => {
-    console.log("Dashboard running at http://127.0.0.1:3000");
+  const config = loadConfig();
+  createServer({ config }).listen(config.port, config.host, () => {
+    logEvent(config, "info", "listening", { mode: config.mode,
+      host: config.host, port: config.port });
   });
 }
 

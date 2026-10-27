@@ -73,4 +73,3 @@ Repeated Game Demo
 ```
 
 Phase 1 intentionally focuses only on the game-theory core. Graph routing, DP planning, and dashboard features will be added later.
-

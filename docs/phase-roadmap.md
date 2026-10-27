@@ -29,6 +29,8 @@ Focus:
 
 ## Phase 3: DP Energy Planner
 
+Status: completed.
+
 Focus:
 
 - Repeated decision optimization
@@ -36,6 +38,8 @@ Focus:
 - Compare greedy decision-making with DP planning
 
 ## Phase 4: Simulation Metrics
+
+Status: completed.
 
 Focus:
 
@@ -47,6 +51,8 @@ Focus:
 
 ## Phase 5: Dashboard
 
+Status: completed and integrated with the local simulation API.
+
 Focus:
 
 - Visualize node states
@@ -55,6 +61,8 @@ Focus:
 - Highlight suspicious nodes
 
 ## Phase 6: Final Polish
+
+Status: completed.
 
 Focus:
 
